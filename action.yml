@@ -35,7 +35,17 @@ runs:
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
-        npx -y -p vibe-security-scanner@latest scan-my-app --json "$WORKING_DIRECTORY" > "$RUNNER_TEMP/vibe-scan-report.json"
+        set +e
+        npx -y -p vibe-security-scanner@latest scan-my-app --json "$WORKING_DIRECTORY" > "$RUNNER_TEMP/vibe-scan-report.json" 2> "$RUNNER_TEMP/vibe-scan-stderr.log"
+        exit_code=$?
+        echo "DEBUG: npx exit code: $exit_code"
+        echo "DEBUG: report file size:"
+        wc -c "$RUNNER_TEMP/vibe-scan-report.json"
+        echo "DEBUG: report file content:"
+        cat "$RUNNER_TEMP/vibe-scan-report.json"
+        echo "DEBUG: stderr:"
+        cat "$RUNNER_TEMP/vibe-scan-stderr.log"
+        exit $exit_code
 
     - name: Report results
       uses: actions/github-script@v7
