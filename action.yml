@@ -32,8 +32,10 @@ runs:
 
     - name: Run vibe-security-scanner
       shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
-        npx -y -p vibe-security-scanner@latest scan-my-app --json "${{ inputs.working-directory }}" > "$RUNNER_TEMP/vibe-scan-report.json"
+        npx -y -p vibe-security-scanner@latest scan-my-app --json "$WORKING_DIRECTORY" > "$RUNNER_TEMP/vibe-scan-report.json"
 
     - name: Report results
       uses: actions/github-script@v7

@@ -121,14 +121,19 @@ export async function findDependencyVulnerabilities(targetDir: string): Promise<
   const findings: Finding[] = [];
 
   for (const raw of rawFindings) {
+    // osv-scanner's source.path may be relative to targetDir rather than to
+    // our own cwd (e.g. when targetDir is a subdirectory) — resolve once and
+    // reuse it for both the line lookup and the reported file path so they
+    // agree on the same file.
+    const absolutePath = resolve(targetDir, raw.file);
     let content = contentCache.get(raw.file);
     if (content === undefined) {
-      content = await readFile(raw.file, "utf8").catch(() => "");
+      content = await readFile(absolutePath, "utf8").catch(() => "");
       contentCache.set(raw.file, content);
     }
 
     findings.push({
-      file: relative(targetDir, resolve(targetDir, raw.file)).split(sep).join("/"),
+      file: relative(targetDir, absolutePath).split(sep).join("/"),
       line: findLineForPackage(content, raw.packageName),
       ruleId: raw.ruleId,
       description: raw.description,
