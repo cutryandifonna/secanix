@@ -1,0 +1,24 @@
+rules:
+  - id: nextjs-api-route-missing-auth
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      API route Next.js ini kelihatan gak ada auth check (session/token) sebelum jalanin logic.
+    paths:
+      include:
+        - "pages/api/**"
+        - "src/pages/api/**"
+        - "app/**/route.ts"
+        - "app/**/route.js"
+        - "src/app/**/route.ts"
+        - "src/app/**/route.js"
+    patterns:
+      - pattern-either:
+          - pattern: export default function $HANDLER(...) { ... }
+          - pattern: export default async function $HANDLER(...) { ... }
+          - pattern: export async function GET(...) { ... }
+          - pattern: export async function POST(...) { ... }
+          - pattern: export async function PUT(...) { ... }
+          - pattern: export async function PATCH(...) { ... }
+          - pattern: export async function DELETE(...) { ... }
+      - pattern-not-regex: (?i)(getServerSession|getToken|currentUser|verifyAuth|requireAuth|withAuth|auth\(\)|\.auth\.getUser|\.auth\.getSession|jwt\.verify|isAuthenticated|checkAuth)
