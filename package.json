@@ -1,11 +1,11 @@
 {
   "name": "vibe-security-scanner",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "description": "Security scanner buat app hasil vibe-coding (Next.js + Supabase/Firebase).",
   "type": "module",
   "bin": {
-    "scan-my-app": "./dist/cli.js"
+    "scan-my-app": "dist/cli.js"
   },
   "main": "./dist/cli.js",
   "files": [
