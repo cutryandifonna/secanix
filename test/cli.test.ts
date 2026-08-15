@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const runSecretScan = vi.fn();
 const findExposedServiceRoleKeys = vi.fn();
 const findMissingApiAuth = vi.fn();
+const findRlsDisabledTables = vi.fn();
 
 vi.mock("../src/checks/secretScan.js", async () => {
   const actual = await vi.importActual<typeof import("../src/checks/secretScan.js")>(
@@ -34,6 +35,16 @@ vi.mock("../src/checks/apiAuthMissing.js", async () => {
   };
 });
 
+vi.mock("../src/checks/rlsDisabled.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/checks/rlsDisabled.js")>(
+    "../src/checks/rlsDisabled.js"
+  );
+  return {
+    ...actual,
+    findRlsDisabledTables: (...args: unknown[]) => findRlsDisabledTables(...args),
+  };
+});
+
 const { run } = await import("../src/cli.js");
 const { GitleaksNotFoundError } = await import("../src/checks/secretScan.js");
 const { SemgrepNotFoundError } = await import("../src/checks/apiAuthMissing.js");
@@ -45,6 +56,8 @@ describe("run", () => {
     findExposedServiceRoleKeys.mockResolvedValue([]);
     findMissingApiAuth.mockReset();
     findMissingApiAuth.mockResolvedValue([]);
+    findRlsDisabledTables.mockReset();
+    findRlsDisabledTables.mockResolvedValue([]);
   });
 
   it("returns exit code 0 and reports zero findings", async () => {
@@ -128,6 +141,27 @@ describe("run", () => {
 
     expect(exitCode).toBe(0);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("pages/api/unprotected.ts:1"));
+    logSpy.mockRestore();
+  });
+
+  it("includes rls-disabled findings in the report", async () => {
+    runSecretScan.mockResolvedValue([]);
+    findRlsDisabledTables.mockResolvedValue([
+      {
+        file: "supabase/migrations/0001_init.sql",
+        line: 1,
+        ruleId: "supabase-rls-missing",
+        description: "RLS missing on notes",
+      },
+    ]);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const exitCode = await run("/some/dir");
+
+    expect(exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("supabase/migrations/0001_init.sql:1")
+    );
     logSpy.mockRestore();
   });
 

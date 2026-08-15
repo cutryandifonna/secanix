@@ -3,6 +3,7 @@
 import { pathToFileURL } from "node:url";
 import { findMissingApiAuth, SemgrepNotFoundError } from "./checks/apiAuthMissing.js";
 import { findExposedServiceRoleKeys } from "./checks/exposedServiceRoleKey.js";
+import { findRlsDisabledTables } from "./checks/rlsDisabled.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
 import type { Finding } from "./checks/types.js";
 
@@ -32,6 +33,8 @@ export async function run(targetDir: string = process.cwd()): Promise<number> {
     }
     throw err;
   }
+
+  findings.push(...(await findRlsDisabledTables(targetDir)));
 
   if (findings.length === 0) {
     console.log("Nol temuan.");
