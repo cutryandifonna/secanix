@@ -253,4 +253,37 @@ describe("run", () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("osv-scanner"));
     errorSpy.mockRestore();
   });
+
+  it("prints JSON output with zero findings and no banner text", async () => {
+    runSecretScan.mockResolvedValue([]);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const exitCode = await run("/some/dir", { json: true });
+
+    expect(exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toEqual([]);
+    logSpy.mockRestore();
+  });
+
+  it("prints JSON output with severity and fixSuggestion attached to findings", async () => {
+    runSecretScan.mockResolvedValue([
+      { file: "src/db.ts", line: 12, ruleId: "aws-access-key", description: "AWS Access Key" },
+    ]);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const exitCode = await run("/some/dir", { json: true });
+
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(logSpy.mock.calls[0][0] as string);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({
+      file: "src/db.ts",
+      line: 12,
+      ruleId: "aws-access-key",
+      severity: "critical",
+      fixSuggestion: expect.any(String),
+    });
+    logSpy.mockRestore();
+  });
 });

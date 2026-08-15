@@ -9,8 +9,16 @@ import { findRlsDisabledTables } from "./checks/rlsDisabled.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
 import { buildReport, formatReport, type CheckFindings } from "./report.js";
 
-export async function run(targetDir: string = process.cwd()): Promise<number> {
-  console.log("Vibe Security Scanner v0.1.0");
+export interface RunOptions {
+  json?: boolean;
+}
+
+export async function run(targetDir: string = process.cwd(), options: RunOptions = {}): Promise<number> {
+  const { json = false } = options;
+
+  if (!json) {
+    console.log("Vibe Security Scanner v0.1.0");
+  }
 
   const checkFindings: CheckFindings[] = [];
 
@@ -55,8 +63,14 @@ export async function run(targetDir: string = process.cwd()): Promise<number> {
     throw err;
   }
 
-  for (const line of formatReport(buildReport(checkFindings))) {
-    console.log(line);
+  const reported = buildReport(checkFindings);
+
+  if (json) {
+    console.log(JSON.stringify(reported));
+  } else {
+    for (const line of formatReport(reported)) {
+      console.log(line);
+    }
   }
 
   return 0;
@@ -64,5 +78,8 @@ export async function run(targetDir: string = process.cwd()): Promise<number> {
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  process.exit(await run(process.argv[2]));
+  const args = process.argv.slice(2);
+  const json = args.includes("--json");
+  const targetDir = args.find((arg) => arg !== "--json");
+  process.exit(await run(targetDir, { json }));
 }
