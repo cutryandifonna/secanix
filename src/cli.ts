@@ -1,22 +1,17 @@
 #!/usr/bin/env node
 
 import { pathToFileURL } from "node:url";
+import { findExposedServiceRoleKeys } from "./checks/exposedServiceRoleKey.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
+import type { Finding } from "./checks/types.js";
 
 export async function run(targetDir: string = process.cwd()): Promise<number> {
   console.log("Vibe Security Scanner v0.1.0");
 
+  const findings: Finding[] = [];
+
   try {
-    const findings = await runSecretScan(targetDir);
-    if (findings.length === 0) {
-      console.log("Secret scan: nol temuan.");
-    } else {
-      console.log(`Secret scan: ${findings.length} temuan.`);
-      for (const finding of findings) {
-        console.log(`  ${finding.file}:${finding.line} — ${finding.description} [${finding.ruleId}]`);
-      }
-    }
-    return 0;
+    findings.push(...(await runSecretScan(targetDir)));
   } catch (err) {
     if (err instanceof GitleaksNotFoundError) {
       console.error(err.message);
@@ -24,6 +19,19 @@ export async function run(targetDir: string = process.cwd()): Promise<number> {
     }
     throw err;
   }
+
+  findings.push(...(await findExposedServiceRoleKeys(targetDir)));
+
+  if (findings.length === 0) {
+    console.log("Nol temuan.");
+  } else {
+    console.log(`${findings.length} temuan:`);
+    for (const finding of findings) {
+      console.log(`  ${finding.file}:${finding.line} — ${finding.description} [${finding.ruleId}]`);
+    }
+  }
+
+  return 0;
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
