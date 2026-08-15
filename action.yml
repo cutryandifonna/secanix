@@ -83,8 +83,8 @@ runs:
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;
 
-            const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
-            const existing = comments.data.find((c) => c.body.includes(marker));
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find((c) => c.body.includes(marker));
 
             if (existing) {
               await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
