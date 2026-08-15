@@ -4,6 +4,7 @@ const runSecretScan = vi.fn();
 const findExposedServiceRoleKeys = vi.fn();
 const findMissingApiAuth = vi.fn();
 const findRlsDisabledTables = vi.fn();
+const findCorsWildcard = vi.fn();
 
 vi.mock("../src/checks/secretScan.js", async () => {
   const actual = await vi.importActual<typeof import("../src/checks/secretScan.js")>(
@@ -45,6 +46,16 @@ vi.mock("../src/checks/rlsDisabled.js", async () => {
   };
 });
 
+vi.mock("../src/checks/corsWildcard.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/checks/corsWildcard.js")>(
+    "../src/checks/corsWildcard.js"
+  );
+  return {
+    ...actual,
+    findCorsWildcard: (...args: unknown[]) => findCorsWildcard(...args),
+  };
+});
+
 const { run } = await import("../src/cli.js");
 const { GitleaksNotFoundError } = await import("../src/checks/secretScan.js");
 const { SemgrepNotFoundError } = await import("../src/checks/apiAuthMissing.js");
@@ -58,6 +69,8 @@ describe("run", () => {
     findMissingApiAuth.mockResolvedValue([]);
     findRlsDisabledTables.mockReset();
     findRlsDisabledTables.mockResolvedValue([]);
+    findCorsWildcard.mockReset();
+    findCorsWildcard.mockResolvedValue([]);
   });
 
   it("returns exit code 0 and reports zero findings", async () => {
@@ -162,6 +175,25 @@ describe("run", () => {
     expect(logSpy).toHaveBeenCalledWith(
       expect.stringContaining("supabase/migrations/0001_init.sql:1")
     );
+    logSpy.mockRestore();
+  });
+
+  it("includes cors-wildcard findings in the report", async () => {
+    runSecretScan.mockResolvedValue([]);
+    findCorsWildcard.mockResolvedValue([
+      {
+        file: "pages/api/hello.ts",
+        line: 1,
+        ruleId: "cors-wildcard-origin",
+        description: "CORS wildcard origin",
+      },
+    ]);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const exitCode = await run("/some/dir");
+
+    expect(exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("pages/api/hello.ts:1"));
     logSpy.mockRestore();
   });
 

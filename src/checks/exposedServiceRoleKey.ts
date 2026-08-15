@@ -1,9 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { basename, extname, relative, sep } from "node:path";
-import { collectFiles } from "./fsWalk.js";
+import { collectFiles, SOURCE_EXTENSIONS } from "./fsWalk.js";
 import type { Finding } from "./types.js";
-
-const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
 // NEXT_PUBLIC_* env vars get inlined into the client bundle at build time —
 // a Supabase service role key under that prefix is a guaranteed leak.

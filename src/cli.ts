@@ -2,6 +2,7 @@
 
 import { pathToFileURL } from "node:url";
 import { findMissingApiAuth, SemgrepNotFoundError } from "./checks/apiAuthMissing.js";
+import { findCorsWildcard } from "./checks/corsWildcard.js";
 import { findExposedServiceRoleKeys } from "./checks/exposedServiceRoleKey.js";
 import { findRlsDisabledTables } from "./checks/rlsDisabled.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
@@ -35,6 +36,7 @@ export async function run(targetDir: string = process.cwd()): Promise<number> {
   }
 
   findings.push(...(await findRlsDisabledTables(targetDir)));
+  findings.push(...(await findCorsWildcard(targetDir)));
 
   if (findings.length === 0) {
     console.log("Nol temuan.");

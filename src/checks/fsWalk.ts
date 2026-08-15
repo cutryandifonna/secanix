@@ -2,6 +2,7 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 export const IGNORED_DIRS = new Set(["node_modules", ".git", ".next", "dist", "build", "out", "coverage"]);
+export const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
 export async function collectFiles(
   dir: string,
