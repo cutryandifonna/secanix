@@ -64,5 +64,5 @@ export async function run(targetDir: string = process.cwd()): Promise<number> {
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  process.exit(await run());
+  process.exit(await run(process.argv[2]));
 }
