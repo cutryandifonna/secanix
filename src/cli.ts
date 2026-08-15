@@ -3,6 +3,7 @@
 import { pathToFileURL } from "node:url";
 import { findMissingApiAuth, SemgrepNotFoundError } from "./checks/apiAuthMissing.js";
 import { findCorsWildcard } from "./checks/corsWildcard.js";
+import { findDependencyVulnerabilities, OsvScannerNotFoundError } from "./checks/dependencyVulnerabilities.js";
 import { findExposedServiceRoleKeys } from "./checks/exposedServiceRoleKey.js";
 import { findRlsDisabledTables } from "./checks/rlsDisabled.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
@@ -37,6 +38,16 @@ export async function run(targetDir: string = process.cwd()): Promise<number> {
 
   findings.push(...(await findRlsDisabledTables(targetDir)));
   findings.push(...(await findCorsWildcard(targetDir)));
+
+  try {
+    findings.push(...(await findDependencyVulnerabilities(targetDir)));
+  } catch (err) {
+    if (err instanceof OsvScannerNotFoundError) {
+      console.error(err.message);
+      return 1;
+    }
+    throw err;
+  }
 
   if (findings.length === 0) {
     console.log("Nol temuan.");

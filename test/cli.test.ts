@@ -5,6 +5,7 @@ const findExposedServiceRoleKeys = vi.fn();
 const findMissingApiAuth = vi.fn();
 const findRlsDisabledTables = vi.fn();
 const findCorsWildcard = vi.fn();
+const findDependencyVulnerabilities = vi.fn();
 
 vi.mock("../src/checks/secretScan.js", async () => {
   const actual = await vi.importActual<typeof import("../src/checks/secretScan.js")>(
@@ -56,9 +57,20 @@ vi.mock("../src/checks/corsWildcard.js", async () => {
   };
 });
 
+vi.mock("../src/checks/dependencyVulnerabilities.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/checks/dependencyVulnerabilities.js")>(
+    "../src/checks/dependencyVulnerabilities.js"
+  );
+  return {
+    ...actual,
+    findDependencyVulnerabilities: (...args: unknown[]) => findDependencyVulnerabilities(...args),
+  };
+});
+
 const { run } = await import("../src/cli.js");
 const { GitleaksNotFoundError } = await import("../src/checks/secretScan.js");
 const { SemgrepNotFoundError } = await import("../src/checks/apiAuthMissing.js");
+const { OsvScannerNotFoundError } = await import("../src/checks/dependencyVulnerabilities.js");
 
 describe("run", () => {
   beforeEach(() => {
@@ -71,6 +83,8 @@ describe("run", () => {
     findRlsDisabledTables.mockResolvedValue([]);
     findCorsWildcard.mockReset();
     findCorsWildcard.mockResolvedValue([]);
+    findDependencyVulnerabilities.mockReset();
+    findDependencyVulnerabilities.mockResolvedValue([]);
   });
 
   it("returns exit code 0 and reports zero findings", async () => {
@@ -206,6 +220,37 @@ describe("run", () => {
 
     expect(exitCode).toBe(1);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("semgrep"));
+    errorSpy.mockRestore();
+  });
+
+  it("includes dependency-vulnerability findings in the report", async () => {
+    runSecretScan.mockResolvedValue([]);
+    findDependencyVulnerabilities.mockResolvedValue([
+      {
+        file: "package-lock.json",
+        line: 6,
+        ruleId: "GHSA-29mw-wpgm-hmr9",
+        description: "lodash@4.17.15 kena kerentanan dikenal",
+      },
+    ]);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const exitCode = await run("/some/dir");
+
+    expect(exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("package-lock.json:6"));
+    logSpy.mockRestore();
+  });
+
+  it("returns exit code 1 when osv-scanner is not installed", async () => {
+    runSecretScan.mockResolvedValue([]);
+    findDependencyVulnerabilities.mockRejectedValue(new OsvScannerNotFoundError());
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const exitCode = await run("/some/dir");
+
+    expect(exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("osv-scanner"));
     errorSpy.mockRestore();
   });
 });
