@@ -7,15 +7,15 @@ import { findDependencyVulnerabilities, OsvScannerNotFoundError } from "./checks
 import { findExposedServiceRoleKeys } from "./checks/exposedServiceRoleKey.js";
 import { findRlsDisabledTables } from "./checks/rlsDisabled.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
-import type { Finding } from "./checks/types.js";
+import { buildReport, formatReport, type CheckFindings } from "./report.js";
 
 export async function run(targetDir: string = process.cwd()): Promise<number> {
   console.log("Vibe Security Scanner v0.1.0");
 
-  const findings: Finding[] = [];
+  const checkFindings: CheckFindings[] = [];
 
   try {
-    findings.push(...(await runSecretScan(targetDir)));
+    checkFindings.push({ checkId: "secret-scan", findings: await runSecretScan(targetDir) });
   } catch (err) {
     if (err instanceof GitleaksNotFoundError) {
       console.error(err.message);
@@ -24,10 +24,13 @@ export async function run(targetDir: string = process.cwd()): Promise<number> {
     throw err;
   }
 
-  findings.push(...(await findExposedServiceRoleKeys(targetDir)));
+  checkFindings.push({
+    checkId: "exposed-service-role-key",
+    findings: await findExposedServiceRoleKeys(targetDir),
+  });
 
   try {
-    findings.push(...(await findMissingApiAuth(targetDir)));
+    checkFindings.push({ checkId: "api-auth-missing", findings: await findMissingApiAuth(targetDir) });
   } catch (err) {
     if (err instanceof SemgrepNotFoundError) {
       console.error(err.message);
@@ -36,11 +39,14 @@ export async function run(targetDir: string = process.cwd()): Promise<number> {
     throw err;
   }
 
-  findings.push(...(await findRlsDisabledTables(targetDir)));
-  findings.push(...(await findCorsWildcard(targetDir)));
+  checkFindings.push({ checkId: "rls-disabled", findings: await findRlsDisabledTables(targetDir) });
+  checkFindings.push({ checkId: "cors-wildcard", findings: await findCorsWildcard(targetDir) });
 
   try {
-    findings.push(...(await findDependencyVulnerabilities(targetDir)));
+    checkFindings.push({
+      checkId: "dependency-cve",
+      findings: await findDependencyVulnerabilities(targetDir),
+    });
   } catch (err) {
     if (err instanceof OsvScannerNotFoundError) {
       console.error(err.message);
@@ -49,13 +55,8 @@ export async function run(targetDir: string = process.cwd()): Promise<number> {
     throw err;
   }
 
-  if (findings.length === 0) {
-    console.log("Nol temuan.");
-  } else {
-    console.log(`${findings.length} temuan:`);
-    for (const finding of findings) {
-      console.log(`  ${finding.file}:${finding.line} — ${finding.description} [${finding.ruleId}]`);
-    }
+  for (const line of formatReport(buildReport(checkFindings))) {
+    console.log(line);
   }
 
   return 0;
