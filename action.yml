@@ -36,7 +36,11 @@ runs:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
         set +e
-        npx -y -p vibe-security-scanner@latest scan-my-app --json "$WORKING_DIRECTORY" > "$RUNNER_TEMP/vibe-scan-report.json" 2> "$RUNNER_TEMP/vibe-scan-stderr.log"
+        echo "DEBUG: node $(node --version), npm $(npm --version), npx $(npx --version)"
+        echo "DEBUG: registry lookup:"
+        npm view vibe-security-scanner@latest version dist.tarball 2>&1
+        echo "DEBUG: running with verbose logging:"
+        NPM_CONFIG_LOGLEVEL=verbose npx -y -p vibe-security-scanner@latest scan-my-app --json "$WORKING_DIRECTORY" > "$RUNNER_TEMP/vibe-scan-report.json" 2> "$RUNNER_TEMP/vibe-scan-stderr.log"
         exit_code=$?
         echo "DEBUG: npx exit code: $exit_code"
         echo "DEBUG: report file size:"
