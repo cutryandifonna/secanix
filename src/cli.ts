@@ -18,7 +18,7 @@ export async function run(targetDir: string = process.cwd(), options: RunOptions
   const { json = false } = options;
 
   if (!json) {
-    console.log("Vibe Security Scanner v0.1.0");
+    console.log("Vibe Security Scanner v0.1.1");
   }
 
   const checkFindings: CheckFindings[] = [];
