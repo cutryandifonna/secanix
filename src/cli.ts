@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { findMissingApiAuth, SemgrepNotFoundError } from "./checks/apiAuthMissing.js";
 import { findCorsWildcard } from "./checks/corsWildcard.js";
@@ -76,10 +77,10 @@ export async function run(targetDir: string = process.cwd(), options: RunOptions
   return 0;
 }
 
-const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
 if (isMain) {
   const args = process.argv.slice(2);
   const json = args.includes("--json");
-  const targetDir = args.find((arg) => arg !== "--json");
+  const targetDir = args.find((arg) => arg !== "--json" && !arg.startsWith("-"));
   process.exit(await run(targetDir, { json }));
 }
