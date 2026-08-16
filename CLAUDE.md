@@ -1,6 +1,8 @@
-# Vibe Security Scanner
+# Secanix
 
 Security scanner khusus buat app hasil vibe-coding (Next.js/Vercel + Supabase/Firebase ecosystem). Cek celah yang paling sering lolos waktu ngoding cepat pakai AI: secret bocor, auth API route absen, RLS Supabase mati, dependency CVE.
+
+Nama produk: **Secanix**, domain **secanix.com**. Rilis npm sekarang masih di bawah nama lama `vibe-security-scanner@0.1.1` — rename package/repo/action.yml ke `secanix` belum dieksekusi (lihat "Belum diputuskan" di bawah dulu isinya, sekarang udah keputusan, tinggal eksekusi teknis).
 
 ## Dokumen
 
@@ -26,8 +28,11 @@ Baca `docs/01-product/overview.md` dulu buat konteks penuh sebelum mulai build.
 - MVP dulu: CLI + 5-6 cek prioritas tinggi. Dashboard, multi-language support, auto-fix — belakangan.
 - Jangan publish nama app spesifik dari hasil scan tanpa izin eksplisit (risiko legal/reputasi).
 
+## Keputusan (2026-08-16)
+
+- Nama final produk: **Secanix**. Domain: **secanix.com** (belum dibeli). Rename npm package dari `vibe-security-scanner` ke `secanix` — diputuskan, belum dieksekusi.
+- Payment provider: **LemonSqueezy** (Merchant of Record, License Key API buat verifikasi Pro tier). User lagi daftar akun.
+
 ## Belum diputuskan
 
-- Nama final produk / domain.
-- Payment provider (Stripe/LemonSqueezy) — tentukan pas mulai build billing.
 - `.claude/settings.json` permission allowlist — buat pas command dev/build/test udah konkret.
