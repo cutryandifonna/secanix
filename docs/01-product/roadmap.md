@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Fase 1 — MVP (2 minggu)
-- CLI `npx scan-my-app`.
+- CLI `npx secanix`.
 - 5-6 cek prioritas tinggi (lihat [mvp-scope.md](mvp-scope.md)).
 - Laporan markdown, bahasa manusia.
 - Testing rules terhadap 5-10 app open-source vibe-coded — validasi false-positive rate rendah sebelum launch.

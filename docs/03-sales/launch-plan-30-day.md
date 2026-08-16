@@ -9,7 +9,7 @@
 - Posting di Reddit r/SideProject, r/webdev — insight dulu, bukan promosi langsung.
 
 ## Minggu 3 — Launch
-- Product Hunt launch, demo GIF: `npx scan-my-app` → laporan keluar dalam 30 detik.
+- Product Hunt launch, demo GIF: `npx secanix` → laporan keluar dalam 30 detik.
 - Listing GitHub Marketplace (Action).
 - DM langsung ke builder yang sering post "baru ship app pakai Claude/Cursor" — tawarkan scan gratis 1-on-1.
 

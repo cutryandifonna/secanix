@@ -13,7 +13,7 @@
 ## Format konten
 
 - **Thread temuan agregat** — "Aku scan 10 app vibe-coded populer, ini pola kesalahan yang paling sering ketemu" (anonymized, tanpa nama app spesifik).
-- **Demo GIF** — `npx scan-my-app` → laporan keluar dalam hitungan detik. Visual before/after (raw error vs laporan rapi) kuat buat share.
+- **Demo GIF** — `npx secanix` → laporan keluar dalam hitungan detik. Visual before/after (raw error vs laporan rapi) kuat buat share.
 - **War story personal** — kalau ada pengalaman nyata (misal dari kelola multi-project sendiri), pakai itu sebagai bukti kredibilitas, bukan generic sales copy.
 - **Insight edukasi** — "kenapa Supabase service role key ketiban ke client itu bahaya" — bangun otoritas topik, bukan jualan langsung.
 

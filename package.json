@@ -1,16 +1,16 @@
 {
-  "name": "vibe-security-scanner",
-  "version": "0.1.1",
+  "name": "secanix",
+  "version": "0.1.2",
   "private": false,
   "description": "Security scanner buat app hasil vibe-coding (Next.js + Supabase/Firebase).",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cutryandifonna/vibe-security-scanner.git"
+    "url": "git+https://github.com/cutryandifonna/secanix.git"
   },
   "type": "module",
   "bin": {
-    "scan-my-app": "dist/cli.js"
+    "secanix": "dist/cli.js"
   },
   "main": "./dist/cli.js",
   "files": [

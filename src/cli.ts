@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { findMissingApiAuth, SemgrepNotFoundError } from "./checks/apiAuthMissing.js";
 import { findCorsWildcard } from "./checks/corsWildcard.js";
@@ -14,11 +14,15 @@ export interface RunOptions {
   json?: boolean;
 }
 
+const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+  version: string;
+};
+
 export async function run(targetDir: string = process.cwd(), options: RunOptions = {}): Promise<number> {
   const { json = false } = options;
 
   if (!json) {
-    console.log("Vibe Security Scanner v0.1.1");
+    console.log(`Secanix v${version}`);
   }
 
   const checkFindings: CheckFindings[] = [];

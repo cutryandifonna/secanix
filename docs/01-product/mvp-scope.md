@@ -26,7 +26,7 @@
 
 ## Bentuk produk
 
-- **CLI**: `npx scan-my-app` — jalan lokal, hasil di terminal + link laporan web (opsional).
+- **CLI**: `npx secanix` — jalan lokal, hasil di terminal + link laporan web (opsional).
 - **GitHub Action**: versi CI, auto-scan tiap PR, comment inline di diff.
 - **Dashboard**: fase 2, historical tracking + trend, bukan MVP.
 

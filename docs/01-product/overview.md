@@ -33,7 +33,7 @@ Target: builder solo / indie hacker / small team yang ship produk pakai AI codin
 | Semgrep (generik) | Powerful tapi butuh nulis rule sendiri, gak ada preset buat pola AI-framework |
 | `npm audit` manual | Cuma cover dependency CVE, gak cover config/auth/secret |
 
-Vibe Security Scanner bedanya: preset rule spesifik buat pola kesalahan Next.js + Supabase/Firebase, laporan bahasa manusia, setup nol-konfigurasi.
+Secanix bedanya: preset rule spesifik buat pola kesalahan Next.js + Supabase/Firebase, laporan bahasa manusia, setup nol-konfigurasi.
 
 ## Related
 

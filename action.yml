@@ -1,4 +1,4 @@
-name: "Vibe Security Scanner"
+name: "Secanix"
 description: "Scan Next.js/Supabase apps for leaked secrets, missing API auth, disabled RLS, CORS wildcards, and vulnerable dependencies."
 inputs:
   working-directory:
@@ -30,13 +30,13 @@ runs:
         sudo curl -sSfL -o /usr/local/bin/osv-scanner https://github.com/google/osv-scanner/releases/download/v2.5.0/osv-scanner_linux_amd64
         sudo chmod +x /usr/local/bin/osv-scanner
 
-    - name: Run vibe-security-scanner
+    - name: Run secanix
       shell: bash
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
-        npm install --no-save --prefix "$RUNNER_TEMP/vsc-install" vibe-security-scanner@0.1.1
-        node "$RUNNER_TEMP/vsc-install/node_modules/vibe-security-scanner/dist/cli.js" --json "$WORKING_DIRECTORY" > "$RUNNER_TEMP/vibe-scan-report.json"
+        npm install --no-save --prefix "$RUNNER_TEMP/secanix-install" secanix@0.1.2
+        node "$RUNNER_TEMP/secanix-install/node_modules/secanix/dist/cli.js" --json "$WORKING_DIRECTORY" > "$RUNNER_TEMP/secanix-report.json"
 
     - name: Report results
       uses: actions/github-script@v7
@@ -47,7 +47,7 @@ runs:
           const fs = require('fs');
           const path = require('path');
 
-          const reportPath = path.join(process.env.RUNNER_TEMP, 'vibe-scan-report.json');
+          const reportPath = path.join(process.env.RUNNER_TEMP, 'secanix-report.json');
           const reportContent = fs.readFileSync(reportPath, 'utf8');
           if (reportContent.trim().length === 0) {
             throw new Error('scanner produced no output — check the previous step\'s logs');
@@ -63,8 +63,8 @@ runs:
             counts[finding.severity]++;
           }
 
-          const marker = '<!-- vibe-security-scanner-report -->';
-          const lines = [marker, '## Vibe Security Scanner'];
+          const marker = '<!-- secanix-report -->';
+          const lines = [marker, '## Secanix'];
           const workingDirectory = process.env.WORKING_DIRECTORY;
 
           if (findings.length === 0) {
