@@ -1,5 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { parseSemgrepReport } from "../../src/checks/apiAuthMissing.js";
+import { EventEmitter } from "node:events";
+import { spawn } from "node:child_process";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("node:child_process", () => ({
+  spawn: vi.fn(),
+}));
+
+const { findMissingApiAuth, parseSemgrepReport } = await import(
+  "../../src/checks/apiAuthMissing.js"
+);
 
 describe("parseSemgrepReport", () => {
   it("returns empty array for empty report content", () => {
@@ -57,5 +66,34 @@ describe("parseSemgrepReport", () => {
     expect(parseSemgrepReport(report)).toEqual([
       { file: "b.ts", line: 2, ruleId: "valid-rule", description: "valid-rule" },
     ]);
+  });
+});
+
+describe("findMissingApiAuth", () => {
+  afterEach(() => {
+    vi.mocked(spawn).mockReset();
+  });
+
+  it("does not pass --no-git-ignore to semgrep", async () => {
+    // Regression test: --no-git-ignore made semgrep walk node_modules/.next,
+    // which crashed with a PermissionError on Next.js's .next/dev/lock file
+    // in real projects (found by running the CLI against secanix-landing).
+    let capturedArgs: string[] = [];
+    vi.mocked(spawn).mockImplementation((_cmd, args) => {
+      capturedArgs = args as string[];
+      const child = new EventEmitter() as unknown as ReturnType<typeof spawn>;
+      const stdout = new EventEmitter();
+      const stderr = new EventEmitter();
+      Object.assign(child, { stdout, stderr });
+      queueMicrotask(() => {
+        stdout.emit("data", Buffer.from(JSON.stringify({ results: [] })));
+        child.emit("close", 0);
+      });
+      return child;
+    });
+
+    await findMissingApiAuth("/some/target/dir");
+
+    expect(capturedArgs).not.toContain("--no-git-ignore");
   });
 });

@@ -1,8 +1,12 @@
 import { spawn } from "node:child_process";
+import { dirname, join } from "node:path";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Finding } from "./types.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CONFIG_PATH = join(__dirname, "..", "rules", "gitleaks-config.toml");
 
 export class GitleaksNotFoundError extends Error {
   constructor() {
@@ -81,6 +85,8 @@ export async function runSecretScan(targetDir: string): Promise<Finding[]> {
       targetDir,
       "--no-git",
       "--no-banner",
+      "--config",
+      CONFIG_PATH,
       "--report-format",
       "json",
       "--report-path",

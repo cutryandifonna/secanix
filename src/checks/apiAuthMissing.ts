@@ -83,7 +83,6 @@ export async function findMissingApiAuth(targetDir: string): Promise<Finding[]> 
     RULE_PATH,
     "--json",
     "--quiet",
-    "--no-git-ignore",
     targetDir,
   ]);
 

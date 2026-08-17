@@ -1,0 +1,13 @@
+[extend]
+useDefault = true
+
+[allowlist]
+paths = [
+  '''(^|/)node_modules(/|$)''',
+  '''(^|/)\.git(/|$)''',
+  '''(^|/)\.next(/|$)''',
+  '''(^|/)dist(/|$)''',
+  '''(^|/)build(/|$)''',
+  '''(^|/)out(/|$)''',
+  '''(^|/)coverage(/|$)''',
+]

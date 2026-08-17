@@ -1,5 +1,16 @@
-import { describe, expect, it } from "vitest";
-import { parseGitleaksReport } from "../../src/checks/secretScan.js";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { parseGitleaksReport, runSecretScan } from "../../src/checks/secretScan.js";
+
+// A realistic-shaped fake secret — gitleaks' generic-entropy rules don't
+// reliably fire on arbitrary short strings (e.g. "AKIAZZZ..." alone), but
+// this Stripe-test-key-shaped value reliably matches the built-in
+// stripe-access-token rule. Split across two literals (not one contiguous
+// token) and using the test-key prefix so it doesn't itself trip GitHub's
+// push-protection secret scanner on this very file.
+const FAKE_SECRET = "sk_test_" + "4eC39HqLyjWDarjtT1zdp7dc5m2k9x8vQwErTyU1";
 
 describe("parseGitleaksReport", () => {
   it("returns empty array for empty report content", () => {
@@ -54,5 +65,42 @@ describe("parseGitleaksReport", () => {
     expect(parseGitleaksReport(report)).toEqual([
       { file: "b.ts", line: 2, ruleId: "valid-rule", description: "valid-rule" },
     ]);
+  });
+});
+
+describe("runSecretScan", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "vibe-secret-scan-e2e-"));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("finds a real secret in source but ignores the same pattern inside .next/node_modules", async () => {
+    // Regression test: gitleaks was invoked with --no-git and no exclude
+    // config, so it walked build output/dependencies directly and flagged
+    // Next.js's own internal build-cache hashes as "CRITICAL" secrets (found
+    // by running the CLI against a real Next.js project, secanix-landing).
+    await mkdir(join(dir, "src"), { recursive: true });
+    await writeFile(join(dir, "src", "config.ts"), `const key = "${FAKE_SECRET}";\n`);
+
+    await mkdir(join(dir, ".next", "cache"), { recursive: true });
+    await writeFile(join(dir, ".next", "cache", "manifest.json"), `{"hash":"${FAKE_SECRET}"}\n`);
+
+    await mkdir(join(dir, "node_modules", "some-pkg"), { recursive: true });
+    await writeFile(
+      join(dir, "node_modules", "some-pkg", "index.js"),
+      `module.exports.key = "${FAKE_SECRET}";\n`
+    );
+
+    const findings = await runSecretScan(dir);
+
+    const files = findings.map((f) => f.file.replace(/\\/g, "/"));
+    expect(files.some((f) => f.includes("src/config.ts"))).toBe(true);
+    expect(files.some((f) => f.includes(".next"))).toBe(false);
+    expect(files.some((f) => f.includes("node_modules"))).toBe(false);
   });
 });
