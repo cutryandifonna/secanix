@@ -1,7 +1,34 @@
 import { spawn } from "node:child_process";
+import { access } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Finding } from "./types.js";
+
+const MIDDLEWARE_CANDIDATES = [
+  "middleware.ts",
+  "middleware.js",
+  join("src", "middleware.ts"),
+  join("src", "middleware.js"),
+];
+
+// A route can be protected upstream by middleware.ts instead of an in-handler
+// check — this rule only ever sees the handler file, so it can't tell.
+// Rather than guess at matcher-pattern coverage (getting that wrong would
+// silently hide a genuinely unprotected route), we stay honest about the gap.
+const MIDDLEWARE_CAVEAT =
+  ' Kalo route ini diproteksi lewat middleware.ts, ini bisa jadi false positive — cek matcher-nya, atau suppress via .secanix.json kalo emang udah aman.';
+
+async function hasMiddlewareFile(targetDir: string): Promise<boolean> {
+  const results = await Promise.all(
+    MIDDLEWARE_CANDIDATES.map((candidate) =>
+      access(join(targetDir, candidate)).then(
+        () => true,
+        () => false
+      )
+    )
+  );
+  return results.some(Boolean);
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const RULE_PATH = join(__dirname, "..", "rules", "nextjs-api-auth-missing.yaml");
@@ -86,8 +113,12 @@ export async function findMissingApiAuth(targetDir: string): Promise<Finding[]> 
     targetDir,
   ]);
 
-  return parseSemgrepReport(stdout).map((finding) => ({
+  const findings = parseSemgrepReport(stdout).map((finding) => ({
     ...finding,
     file: relative(targetDir, resolve(targetDir, finding.file)).split(sep).join("/"),
   }));
+
+  if (findings.length === 0 || !(await hasMiddlewareFile(targetDir))) return findings;
+
+  return findings.map((finding) => ({ ...finding, description: finding.description + MIDDLEWARE_CAVEAT }));
 }

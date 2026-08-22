@@ -1,6 +1,9 @@
 import { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
@@ -69,9 +72,97 @@ describe("parseSemgrepReport", () => {
   });
 });
 
+function mockSemgrepFinding(finding: {
+  check_id: string;
+  path: string;
+  line: number;
+  message: string;
+}): void {
+  vi.mocked(spawn).mockImplementation(() => {
+    const child = new EventEmitter() as unknown as ReturnType<typeof spawn>;
+    const stdout = new EventEmitter();
+    const stderr = new EventEmitter();
+    Object.assign(child, { stdout, stderr });
+    queueMicrotask(() => {
+      stdout.emit(
+        "data",
+        Buffer.from(
+          JSON.stringify({
+            results: [
+              {
+                check_id: finding.check_id,
+                path: finding.path,
+                start: { line: finding.line },
+                extra: { message: finding.message },
+              },
+            ],
+          })
+        )
+      );
+      child.emit("close", 0);
+    });
+    return child;
+  });
+}
+
 describe("findMissingApiAuth", () => {
   afterEach(() => {
     vi.mocked(spawn).mockReset();
+  });
+
+  describe("middleware.ts caveat", () => {
+    let dir: string;
+
+    beforeEach(async () => {
+      dir = await mkdtemp(join(tmpdir(), "secanix-api-auth-mw-"));
+    });
+
+    afterEach(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("appends a middleware caveat when middleware.ts exists at the project root", async () => {
+      await writeFile(join(dir, "middleware.ts"), "export function middleware() {}\n");
+      mockSemgrepFinding({
+        check_id: "nextjs-api-route-missing-auth",
+        path: "app/api/admin/route.ts",
+        line: 1,
+        message: "no auth check found",
+      });
+
+      const findings = await findMissingApiAuth(dir);
+
+      expect(findings[0].description).toContain("middleware.ts");
+      expect(findings[0].description).toContain(".secanix.json");
+    });
+
+    it("appends the caveat for src/middleware.js too", async () => {
+      await mkdir(join(dir, "src"), { recursive: true });
+      await writeFile(join(dir, "src", "middleware.js"), "export function middleware() {}\n");
+      mockSemgrepFinding({
+        check_id: "nextjs-api-route-missing-auth",
+        path: "app/api/admin/route.ts",
+        line: 1,
+        message: "no auth check found",
+      });
+
+      const findings = await findMissingApiAuth(dir);
+
+      expect(findings[0].description).toContain("middleware.ts");
+    });
+
+    it("leaves the description unchanged when no middleware file exists", async () => {
+      mockSemgrepFinding({
+        check_id: "nextjs-api-route-missing-auth",
+        path: "app/api/admin/route.ts",
+        line: 1,
+        message: "no auth check found",
+      });
+
+      const findings = await findMissingApiAuth(dir);
+
+      expect(findings[0].description).toBe("no auth check found");
+    });
   });
 
   it("does not pass --no-git-ignore to semgrep", async () => {

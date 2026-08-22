@@ -69,7 +69,7 @@ export async function findRlsDisabledTables(targetDir: string): Promise<Finding[
         file: table.file,
         line: table.line,
         ruleId: "supabase-rls-missing",
-        description: `Tabel "${table.name}" gak ketemu "ENABLE ROW LEVEL SECURITY" di migration manapun — kemungkinan RLS mati.`,
+        description: `Tabel "${table.name}" gak ketemu "ENABLE ROW LEVEL SECURITY" di migration manapun — kemungkinan RLS mati. Ini cuma liat file migration, bukan state Supabase Dashboard asli — kalo RLS-nya emang udah dinyalain lewat Dashboard, suppress lewat .secanix.json.`,
       });
     }
   }

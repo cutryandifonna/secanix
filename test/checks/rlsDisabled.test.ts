@@ -52,6 +52,30 @@ describe("findRlsDisabledTables", () => {
     ]);
   });
 
+  it("warns that supabase-rls-missing is inferred from migrations only, not live Dashboard state", async () => {
+    await writeFile(join(dir, "0001_init.sql"), "create table public.notes (id uuid primary key);\n");
+
+    const [finding] = await findRlsDisabledTables(dir);
+
+    expect(finding.description).toContain("Dashboard");
+    expect(finding.description).toContain(".secanix.json");
+  });
+
+  it("does not add the Dashboard caveat to the definitive supabase-rls-disabled finding", async () => {
+    await writeFile(
+      join(dir, "0001_init.sql"),
+      [
+        "create table public.notes (id uuid primary key);",
+        "alter table public.notes enable row level security;",
+      ].join("\n")
+    );
+    await writeFile(join(dir, "0002_oops.sql"), "alter table public.notes disable row level security;\n");
+
+    const [finding] = await findRlsDisabledTables(dir);
+
+    expect(finding.description).not.toContain("Dashboard");
+  });
+
   it("does not flag a table whose RLS is enabled in a later migration file", async () => {
     await writeFile(join(dir, "0001_init.sql"), "create table public.notes (id uuid primary key);\n");
     await writeFile(join(dir, "0002_rls.sql"), "alter table public.notes enable row level security;\n");
