@@ -12,6 +12,8 @@ Vibe coder (builder yang ship app cepat pakai AI — Claude Code, Cursor, v0, ds
 - Dependency dengan CVE dikenal, gak pernah di-update.
 - Rate limiting absen di endpoint publik.
 - Debug/console log bocorin data sensitif.
+- Firebase security rules (Firestore/Realtime Database/Storage) kebuka tanpa syarat (`if true`).
+- Firebase Admin SDK key ketiban ke client bundle atau service account JSON-nya ke-commit ke repo.
 
 Tool security existing (Snyk, GitGuardian, Semgrep generik) dibangun buat tim enterprise dengan security engineer. Vibe coder solo gak punya waktu/skill buat setup itu, dan gak butuh compliance report — mereka butuh "kasih tau gue apa yang bocor, sekarang, dalam bahasa yang gue ngerti."
 

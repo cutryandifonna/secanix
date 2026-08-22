@@ -9,6 +9,8 @@ Checks it runs:
 - Disabled Supabase Row Level Security (RLS)
 - CORS wildcard origins
 - Vulnerable dependencies (known CVEs)
+- Open Firebase security rules (Firestore/Realtime Database/Storage)
+- Exposed Firebase Admin SDK keys (env leak or a committed service account JSON file)
 
 ## CLI Usage
 
