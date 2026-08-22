@@ -1,8 +1,12 @@
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseGitleaksReport, runSecretScan } from "../../src/checks/secretScan.js";
+
+const execFileAsync = promisify(execFile);
 
 // A realistic-shaped fake secret — gitleaks' generic-entropy rules don't
 // reliably fire on arbitrary short strings (e.g. "AKIAZZZ..." alone), but
@@ -102,5 +106,38 @@ describe("runSecretScan", () => {
     expect(files.some((f) => f.includes("src/config.ts"))).toBe(true);
     expect(files.some((f) => f.includes(".next"))).toBe(false);
     expect(files.some((f) => f.includes("node_modules"))).toBe(false);
+  });
+
+  it("skips files gitignored in the target repo (e.g. .env)", async () => {
+    await execFileAsync("git", ["init", "-q"], { cwd: dir });
+    await writeFile(join(dir, ".gitignore"), ".env\n");
+    await writeFile(join(dir, ".env"), `SECRET_KEY=${FAKE_SECRET}\n`);
+    await mkdir(join(dir, "src"), { recursive: true });
+    await writeFile(join(dir, "src", "config.ts"), `const key = "${FAKE_SECRET}";\n`);
+
+    const findings = await runSecretScan(dir);
+
+    const files = findings.map((f) => f.file.replace(/\\/g, "/"));
+    expect(files.some((f) => f.includes("src/config.ts"))).toBe(true);
+    expect(files.some((f) => f.includes(".env"))).toBe(false);
+
+    // Regression: findings must point at the real project file, not the
+    // throwaway gitignore-filter mirror dir that gets deleted after the scan.
+    const dirFwd = dir.replace(/\\/g, "/");
+    for (const finding of findings) {
+      const fileFwd = finding.file.replace(/\\/g, "/");
+      expect(fileFwd.startsWith(dirFwd)).toBe(true);
+      expect(fileFwd.includes("mirror")).toBe(false);
+    }
+  });
+
+  it("still scans .env when it is not gitignored (about to be committed)", async () => {
+    await execFileAsync("git", ["init", "-q"], { cwd: dir });
+    await writeFile(join(dir, ".env"), `SECRET_KEY=${FAKE_SECRET}\n`);
+
+    const findings = await runSecretScan(dir);
+
+    const files = findings.map((f) => f.file.replace(/\\/g, "/"));
+    expect(files.some((f) => f.includes(".env"))).toBe(true);
   });
 });

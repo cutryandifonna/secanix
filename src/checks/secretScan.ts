@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import type { Finding } from "./types.js";
@@ -74,15 +74,57 @@ export function parseGitleaksReport(json: string): Finding[] {
   return findings;
 }
 
+// Returns tracked + untracked-but-not-ignored relative paths, or null when
+// targetDir isn't a git repo (no .gitignore semantics to respect there).
+function listGitRespectedFiles(targetDir: string): Promise<string[] | null> {
+  return new Promise((resolve) => {
+    const child = spawn(
+      "git",
+      ["-C", targetDir, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+      { stdio: ["ignore", "pipe", "ignore"] }
+    );
+    let stdout = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.on("error", () => resolve(null));
+    child.on("close", (code) => {
+      if (code !== 0) {
+        resolve(null);
+        return;
+      }
+      resolve(stdout.split("\0").filter((f) => f.length > 0));
+    });
+  });
+}
+
+// Mirrors the given relative paths into mirrorRoot so gitleaks (run with
+// --no-git) only ever sees files .gitignore would let through.
+async function mirrorFiles(sourceDir: string, files: string[], mirrorRoot: string): Promise<void> {
+  for (const rel of files) {
+    const dest = join(mirrorRoot, rel);
+    await mkdir(dirname(dest), { recursive: true });
+    await copyFile(join(sourceDir, rel), dest).catch(() => {});
+  }
+}
+
 export async function runSecretScan(targetDir: string): Promise<Finding[]> {
   const tempDir = await mkdtemp(join(tmpdir(), "vibe-secret-scan-"));
   const reportPath = join(tempDir, "gitleaks-report.json");
 
   try {
+    const respectedFiles = await listGitRespectedFiles(targetDir);
+    let scanDir = targetDir;
+    if (respectedFiles !== null) {
+      scanDir = join(tempDir, "mirror");
+      await mkdir(scanDir, { recursive: true });
+      await mirrorFiles(targetDir, respectedFiles, scanDir);
+    }
+
     await runGitleaksProcess([
       "detect",
       "--source",
-      targetDir,
+      scanDir,
       "--no-git",
       "--no-banner",
       "--config",
@@ -96,7 +138,17 @@ export async function runSecretScan(targetDir: string): Promise<Finding[]> {
     ]);
 
     const content = await readFile(reportPath, "utf8").catch(() => "");
-    return parseGitleaksReport(content);
+    const findings = parseGitleaksReport(content);
+    if (respectedFiles === null) return findings;
+
+    // Mirror dir is deleted below; rewrite paths to point at the real project.
+    const mirrorPrefix = scanDir.replace(/\\/g, "/");
+    return findings.map((finding) => {
+      const fileFwd = finding.file.replace(/\\/g, "/");
+      if (!fileFwd.startsWith(mirrorPrefix)) return finding;
+      const rel = fileFwd.slice(mirrorPrefix.length).replace(/^\/+/, "");
+      return { ...finding, file: join(targetDir, rel) };
+    });
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
