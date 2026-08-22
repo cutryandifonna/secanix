@@ -158,10 +158,10 @@ if (isMain) {
   const args = process.argv.slice(2);
 
   if (args[0] === "license-check") {
-    process.exit(await runLicenseCheck(process.env.SECANIX_LICENSE_KEY));
+    process.exitCode = await runLicenseCheck(process.env.SECANIX_LICENSE_KEY);
   } else {
     const json = args.includes("--json");
     const targetDir = args.find((arg) => arg !== "--json" && !arg.startsWith("-"));
-    process.exit(await run(targetDir, { json }));
+    process.exitCode = await run(targetDir, { json });
   }
 }
