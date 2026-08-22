@@ -2,15 +2,24 @@
 
 Security scanner buat app hasil vibe-coding (Next.js + Supabase/Firebase).
 
-Checks it runs:
-- Leaked secrets (API keys, tokens, credentials committed to the repo)
-- Exposed Supabase service role keys
-- Missing auth on Next.js API routes
-- Disabled Supabase Row Level Security (RLS)
-- CORS wildcard origins
-- Vulnerable dependencies (known CVEs)
-- Open Firebase security rules (Firestore/Realtime Database/Storage)
-- Exposed Firebase Admin SDK keys (env leak or a committed service account JSON file)
+## Checks
+
+| Check | ruleId | Severity | Triggers on | Fix |
+|---|---|---|---|---|
+| Leaked secrets (gitleaks) | varies per gitleaks rule | Critical | Hardcoded API key/token/credential in a git-tracked or about-to-be-tracked file | Rotate the secret now, strip it from code & git history (not just a new commit), move it to an env var / secret manager |
+| Exposed Supabase service role key | `supabase-service-role-key-public-env` | Critical | `NEXT_PUBLIC_*` env var holding a Supabase service role key — gets inlined into the client bundle at build time | Move it to a server-only env var, rotate the key in the Supabase dashboard if it's ever been deployed |
+| Missing auth on Next.js API route | `nextjs-api-route-missing-auth` | High | A Pages/App Router API handler with no session/token check before it runs any logic | Add an auth check (`getServerSession`/`getToken`/etc.) at the top of the handler |
+| Supabase RLS disabled | `supabase-rls-disabled` | Critical | A table where RLS was explicitly turned off | Re-enable RLS (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`) and add matching policies |
+| Supabase RLS missing | `supabase-rls-missing` | High | A table created with no RLS enable statement at all | Add `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` plus a policy for the table |
+| CORS wildcard origin | `cors-wildcard-origin` | Medium | `Access-Control-Allow-Origin: *` (or equivalent) on an API response | Replace `*` with an explicit origin allowlist, or validate the origin dynamically server-side |
+| Open Firebase security rules | `firebase-rules-open` | Critical | Firestore/Realtime Database/Storage rules using `if true` / `.read`/`.write: true` | Replace the allow-all rule with one that checks `request.auth != null` etc. — Firebase's default is deny-all, don't override it to allow-all |
+| Exposed Firebase Admin key (env) | `firebase-admin-key-public-env` | Critical | `NEXT_PUBLIC_*` env var holding a Firebase Admin SDK key — gets inlined into the client bundle at build time | Move it to a server-only env var, rotate the key in Firebase Console if it's ever been deployed |
+| Committed Firebase service account key | `firebase-service-account-key-committed` | Critical | A literal Admin SDK service-account JSON key file checked into the repo | Delete the file from the repo & git history, rotate the key in Firebase Console, store the new one in a secret manager / env var |
+| Vulnerable dependency (osv-scanner) | varies (GHSA id) | Derived from CVSS score (≥9 critical, ≥7 high, ≥4 medium, else low) | A dependency with a known CVE | Update to the patched version named in the advisory |
+
+Two checks (leaked secrets, vulnerable dependencies) delegate to gitleaks/osv-scanner, so
+their `ruleId` varies per finding instead of being fixed — everything else in this table is
+custom, Next.js/Supabase/Firebase-specific pattern matching.
 
 ## CLI Usage
 
