@@ -21,6 +21,18 @@ describe("findOpenRulesInSecurityRulesText", () => {
     const content = ["match /docs/{doc} {", "  allow read, write: if true;", "}"].join("\n");
     expect(findOpenRulesInSecurityRulesText(content)).toEqual([{ line: 2 }]);
   });
+
+  it("matches a rule split across multiple lines", () => {
+    const content = ["match /docs/{doc} {", "  allow read, write:", "    if true;", "}"].join("\n");
+    expect(findOpenRulesInSecurityRulesText(content)).toEqual([{ line: 2 }]);
+  });
+
+  it("does not match a multi-line rule guarded by auth", () => {
+    const content = ["match /docs/{doc} {", "  allow read, write:", "    if request.auth != null;", "}"].join(
+      "\n"
+    );
+    expect(findOpenRulesInSecurityRulesText(content)).toEqual([]);
+  });
 });
 
 describe("findOpenRulesInDatabaseJson", () => {

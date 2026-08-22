@@ -3,7 +3,7 @@ import { basename, relative, sep } from "node:path";
 import { collectFiles } from "./fsWalk.js";
 import type { Finding } from "./types.js";
 
-const OPEN_SECURITY_RULE_PATTERN = /allow\s+[\w,\s]+:\s*if\s+true\s*;/i;
+const OPEN_SECURITY_RULE_PATTERN = /allow\s+[\w,\s]+:\s*if\s+true\s*;/gi;
 const OPEN_DATABASE_JSON_PATTERN = /"\.(?:read|write)"\s*:\s*(?:true|"true")/;
 
 function isFirebaseRulesFile(filePath: string): boolean {
@@ -13,9 +13,12 @@ function isFirebaseRulesFile(filePath: string): boolean {
 
 export function findOpenRulesInSecurityRulesText(content: string): Array<{ line: number }> {
   const matches: Array<{ line: number }> = [];
-  content.split(/\r?\n/).forEach((line, index) => {
-    if (OPEN_SECURITY_RULE_PATTERN.test(line)) matches.push({ line: index + 1 });
-  });
+  const pattern = new RegExp(OPEN_SECURITY_RULE_PATTERN.source, OPEN_SECURITY_RULE_PATTERN.flags);
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(content)) !== null) {
+    const line = content.slice(0, match.index).split(/\r?\n/).length;
+    matches.push({ line });
+  }
   return matches;
 }
 
