@@ -47,6 +47,11 @@ describe("findOpenRulesInDatabaseJson", () => {
   it("does not match a .read rule guarded by auth", () => {
     expect(findOpenRulesInDatabaseJson('".read": "auth != null"')).toEqual([]);
   });
+
+  it("matches .read/.write split across multiple lines", () => {
+    const content = ['".read":', "  true,", '".write": true'].join("\n");
+    expect(findOpenRulesInDatabaseJson(content)).toEqual([{ line: 1 }, { line: 3 }]);
+  });
 });
 
 describe("findOpenFirebaseRules", () => {
