@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const runSecretScan = vi.fn();
 const findExposedServiceRoleKeys = vi.fn();
@@ -285,5 +288,90 @@ describe("run", () => {
       fixSuggestion: expect.any(String),
     });
     logSpy.mockRestore();
+  });
+
+  describe(".secanix.json ignore rules", () => {
+    let dir: string;
+
+    beforeEach(async () => {
+      dir = await mkdtemp(join(tmpdir(), "secanix-cli-ignore-"));
+    });
+
+    afterEach(async () => {
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("suppresses a matching finding and reports it separately on stderr", async () => {
+      await writeFile(
+        join(dir, ".secanix.json"),
+        JSON.stringify({
+          ignore: [{ file: "src/db.ts", ruleId: "aws-access-key", reason: "test fixture, not a real key" }],
+        })
+      );
+      runSecretScan.mockResolvedValue([
+        { file: "src/db.ts", line: 12, ruleId: "aws-access-key", description: "AWS Access Key" },
+      ]);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const exitCode = await run(dir, { json: true });
+
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toEqual([]);
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("1 temuan diabaikan"));
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("test fixture, not a real key"));
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it("does not suppress when ruleId matches but file does not", async () => {
+      await writeFile(
+        join(dir, ".secanix.json"),
+        JSON.stringify({ ignore: [{ file: "other/file.ts", ruleId: "aws-access-key" }] })
+      );
+      runSecretScan.mockResolvedValue([
+        { file: "src/db.ts", line: 12, ruleId: "aws-access-key", description: "AWS Access Key" },
+      ]);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      const exitCode = await run(dir, { json: true });
+
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toHaveLength(1);
+      logSpy.mockRestore();
+    });
+
+    it("ignores a malformed .secanix.json, warns, and still runs the scan", async () => {
+      await writeFile(join(dir, ".secanix.json"), "{ not valid json");
+      runSecretScan.mockResolvedValue([
+        { file: "src/db.ts", line: 12, ruleId: "aws-access-key", description: "AWS Access Key" },
+      ]);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const exitCode = await run(dir, { json: true });
+
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toHaveLength(1);
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining(".secanix.json"));
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it("behaves exactly as before when no .secanix.json is present", async () => {
+      runSecretScan.mockResolvedValue([
+        { file: "src/db.ts", line: 12, ruleId: "aws-access-key", description: "AWS Access Key" },
+      ]);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const exitCode = await run(dir, { json: true });
+
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toHaveLength(1);
+      expect(errorSpy).not.toHaveBeenCalled();
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
   });
 });

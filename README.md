@@ -22,6 +22,29 @@ npx -p secanix@latest secanix --json
 ```
 Same scan, machine-readable JSON output — useful for piping into other tooling.
 
+## Suppressing false positives
+
+Some findings are correct in general but not in your case — e.g. an API route
+protected by `middleware.ts` instead of an in-handler check, which
+`api-auth-missing` can't see. Add a `.secanix.json` at your project root:
+
+```json
+{
+  "ignore": [
+    {
+      "file": "app/api/admin/route.ts",
+      "ruleId": "nextjs-api-route-missing-auth",
+      "reason": "protected by middleware.ts, matcher /api/admin/*"
+    }
+  ]
+}
+```
+
+Both `file` (relative path) and `ruleId` must match exactly. Suppressed
+findings aren't silently dropped — they're printed separately (with your
+`reason`) so they stay visible for review, not just filtered out of the JSON
+output.
+
 ## GitHub Action
 
 Add to `.github/workflows/security-scan.yml` in your repo:

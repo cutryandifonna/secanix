@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { readFileSync, realpathSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { findMissingApiAuth, SemgrepNotFoundError } from "./checks/apiAuthMissing.js";
 import { findCorsWildcard } from "./checks/corsWildcard.js";
@@ -8,7 +10,43 @@ import { findDependencyVulnerabilities, OsvScannerNotFoundError } from "./checks
 import { findExposedServiceRoleKeys } from "./checks/exposedServiceRoleKey.js";
 import { findRlsDisabledTables } from "./checks/rlsDisabled.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
-import { buildReport, formatReport, type CheckFindings } from "./report.js";
+import { applyIgnoreRules, buildReport, formatReport, type CheckFindings, type IgnoreRule } from "./report.js";
+
+const IGNORE_FILE = ".secanix.json";
+
+// Missing file = no suppression (default, zero-friction). Malformed file
+// warns and falls back to no suppression rather than crashing the scan.
+export async function loadIgnoreRules(targetDir: string): Promise<IgnoreRule[]> {
+  let content: string;
+  try {
+    content = await readFile(join(targetDir, IGNORE_FILE), "utf8");
+  } catch {
+    return [];
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(content);
+    const ignore = (parsed as { ignore?: unknown }).ignore;
+    if (!Array.isArray(ignore)) return [];
+
+    const rules: IgnoreRule[] = [];
+    for (const entry of ignore as unknown[]) {
+      if (
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as { file?: unknown }).file === "string" &&
+        typeof (entry as { ruleId?: unknown }).ruleId === "string"
+      ) {
+        const { file, ruleId, reason } = entry as { file: string; ruleId: string; reason?: unknown };
+        rules.push({ file, ruleId, reason: typeof reason === "string" ? reason : undefined });
+      }
+    }
+    return rules;
+  } catch (err) {
+    console.error(`${IGNORE_FILE} invalid, diabaikan: ${(err as Error).message}`);
+    return [];
+  }
+}
 
 export interface RunOptions {
   json?: boolean;
@@ -68,7 +106,16 @@ export async function run(targetDir: string = process.cwd(), options: RunOptions
     throw err;
   }
 
-  const reported = buildReport(checkFindings);
+  const ignoreRules = await loadIgnoreRules(targetDir);
+  const { findings: reported, suppressed } = applyIgnoreRules(buildReport(checkFindings), ignoreRules);
+
+  if (suppressed.length > 0) {
+    console.error(`${suppressed.length} temuan diabaikan via ${IGNORE_FILE}:`);
+    for (const finding of suppressed) {
+      const reasonSuffix = finding.reason ? ` (${finding.reason})` : "";
+      console.error(`  ${finding.file}:${finding.line} — ${finding.ruleId}${reasonSuffix}`);
+    }
+  }
 
   if (json) {
     console.log(JSON.stringify(reported));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReport, classify, formatReport } from "../src/report.js";
+import { applyIgnoreRules, buildReport, classify, formatReport } from "../src/report.js";
 
 const finding = (overrides: Partial<{ file: string; line: number; ruleId: string; description: string }>) => ({
   file: "a.ts",
@@ -67,6 +67,46 @@ describe("buildReport", () => {
     ]);
 
     expect(report.map((f) => f.file)).toEqual(["critical.ts", "high.ts", "medium.ts"]);
+  });
+});
+
+describe("applyIgnoreRules", () => {
+  it("passes every finding through when there are no ignore rules", () => {
+    const reported = buildReport([{ checkId: "cors-wildcard", findings: [finding({ ruleId: "cors-wildcard-origin" })] }]);
+
+    const result = applyIgnoreRules(reported, []);
+
+    expect(result.findings).toEqual(reported);
+    expect(result.suppressed).toEqual([]);
+  });
+
+  it("moves a finding matching file+ruleId into suppressed, carrying the ignore reason", () => {
+    const reported = buildReport([
+      { checkId: "cors-wildcard", findings: [finding({ ruleId: "cors-wildcard-origin", file: "a.ts" })] },
+    ]);
+
+    const result = applyIgnoreRules(reported, [
+      { file: "a.ts", ruleId: "cors-wildcard-origin", reason: "internal admin tool, origin locked by proxy" },
+    ]);
+
+    expect(result.findings).toEqual([]);
+    expect(result.suppressed).toHaveLength(1);
+    expect(result.suppressed[0]).toMatchObject({
+      file: "a.ts",
+      ruleId: "cors-wildcard-origin",
+      reason: "internal admin tool, origin locked by proxy",
+    });
+  });
+
+  it("requires both file and ruleId to match — same ruleId in a different file stays active", () => {
+    const reported = buildReport([
+      { checkId: "cors-wildcard", findings: [finding({ ruleId: "cors-wildcard-origin", file: "b.ts" })] },
+    ]);
+
+    const result = applyIgnoreRules(reported, [{ file: "a.ts", ruleId: "cors-wildcard-origin" }]);
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.suppressed).toEqual([]);
   });
 });
 

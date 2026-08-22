@@ -85,6 +85,39 @@ export function classify(finding: Finding, checkId: string): ReportedFinding {
   return { ...finding, severity: "medium", fixSuggestion: DEFAULT_FIX };
 }
 
+export interface IgnoreRule {
+  file: string;
+  ruleId: string;
+  reason?: string;
+}
+
+export interface SuppressedFinding extends ReportedFinding {
+  reason?: string;
+}
+
+export interface AppliedIgnoreRules {
+  findings: ReportedFinding[];
+  suppressed: SuppressedFinding[];
+}
+
+// file+ruleId must both match — narrow on purpose so an ignore entry never
+// silently swallows an unrelated finding that happens to share one field.
+export function applyIgnoreRules(reported: ReportedFinding[], ignoreRules: IgnoreRule[]): AppliedIgnoreRules {
+  const findings: ReportedFinding[] = [];
+  const suppressed: SuppressedFinding[] = [];
+
+  for (const finding of reported) {
+    const rule = ignoreRules.find((r) => r.file === finding.file && r.ruleId === finding.ruleId);
+    if (rule) {
+      suppressed.push({ ...finding, reason: rule.reason });
+    } else {
+      findings.push(finding);
+    }
+  }
+
+  return { findings, suppressed };
+}
+
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"];
 const SEVERITY_RANK = new Map(SEVERITY_ORDER.map((severity, index) => [severity, index]));
 
