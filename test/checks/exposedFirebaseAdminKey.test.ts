@@ -1,12 +1,16 @@
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   findExposedFirebaseAdminKeys,
   scanTextForCommittedServiceAccountKey,
   scanTextForPublicFirebaseAdminKey,
 } from "../../src/checks/exposedFirebaseAdminKey.js";
+
+const execFileAsync = promisify(execFile);
 
 describe("scanTextForPublicFirebaseAdminKey", () => {
   it("matches a NEXT_PUBLIC_ env var containing FIREBASE_PRIVATE_KEY", () => {
@@ -101,5 +105,26 @@ describe("findExposedFirebaseAdminKeys", () => {
     await writeFile(join(dir, "node_modules", "pkg", "key.json"), '{"type": "service_account"}\n');
 
     expect(await findExposedFirebaseAdminKeys(dir)).toEqual([]);
+  });
+
+  it("notes the .env finding is git-tracked when the file is staged", async () => {
+    await execFileAsync("git", ["init", "-q"], { cwd: dir });
+    await writeFile(join(dir, ".env"), "NEXT_PUBLIC_FIREBASE_PRIVATE_KEY=abc\n");
+    await execFileAsync("git", ["add", ".env"], { cwd: dir });
+
+    const findings = await findExposedFirebaseAdminKeys(dir);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].description).toContain("ke-track di git");
+  });
+
+  it("notes the .env finding is not committed when the file is untracked", async () => {
+    await execFileAsync("git", ["init", "-q"], { cwd: dir });
+    await writeFile(join(dir, ".env.local"), "NEXT_PUBLIC_FIREBASE_PRIVATE_KEY=abc\n");
+
+    const findings = await findExposedFirebaseAdminKeys(dir);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].description).toContain("gitignored atau belum ke-commit");
   });
 });

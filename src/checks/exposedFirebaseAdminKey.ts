@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { basename, extname, relative, sep } from "node:path";
 import { collectFiles, SOURCE_EXTENSIONS } from "./fsWalk.js";
+import { envFileTrackingContext, listTrackedFiles } from "./gitUtils.js";
 import type { Finding } from "./types.js";
 
 // NEXT_PUBLIC_* env vars get inlined into the client bundle at build time —
@@ -38,6 +39,7 @@ export function scanTextForCommittedServiceAccountKey(content: string): Array<{ 
 
 export async function findExposedFirebaseAdminKeys(targetDir: string): Promise<Finding[]> {
   const files = await collectFiles(targetDir, isScannableFile);
+  const tracked = await listTrackedFiles(targetDir);
   const findings: Finding[] = [];
 
   for (const file of files) {
@@ -49,7 +51,7 @@ export async function findExposedFirebaseAdminKeys(targetDir: string): Promise<F
         file: relFile,
         line: match.line,
         ruleId: "firebase-admin-key-public-env",
-        description: `Env var publik "${match.variableName}" kelihatan nyimpen Firebase Admin SDK key — Next.js bakal inline ini ke client bundle.`,
+        description: `Env var publik "${match.variableName}" kelihatan nyimpen Firebase Admin SDK key — Next.js bakal inline ini ke client bundle.${envFileTrackingContext(relFile, tracked)}`,
       });
     }
 

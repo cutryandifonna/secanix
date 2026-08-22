@@ -1,11 +1,15 @@
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   findExposedServiceRoleKeys,
   scanTextForExposedServiceRoleKey,
 } from "../../src/checks/exposedServiceRoleKey.js";
+
+const execFileAsync = promisify(execFile);
 
 describe("scanTextForExposedServiceRoleKey", () => {
   it("matches a NEXT_PUBLIC_ env var containing SERVICE_ROLE", () => {
@@ -88,5 +92,41 @@ describe("findExposedServiceRoleKeys", () => {
     const findings = await findExposedServiceRoleKeys(dir);
 
     expect(findings).toEqual([]);
+  });
+
+  it("notes the .env finding is git-tracked when the file is staged", async () => {
+    await execFileAsync("git", ["init", "-q"], { cwd: dir });
+    await writeFile(join(dir, ".env"), "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=abc\n");
+    await execFileAsync("git", ["add", ".env"], { cwd: dir });
+
+    const findings = await findExposedServiceRoleKeys(dir);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].description).toContain("ke-track di git");
+  });
+
+  it("notes the .env finding is not committed when the file is untracked", async () => {
+    await execFileAsync("git", ["init", "-q"], { cwd: dir });
+    await writeFile(join(dir, ".env.local"), "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=abc\n");
+
+    const findings = await findExposedServiceRoleKeys(dir);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].description).toContain("gitignored atau belum ke-commit");
+  });
+
+  it("does not add git-tracking context to a source-file finding", async () => {
+    await execFileAsync("git", ["init", "-q"], { cwd: dir });
+    await mkdir(join(dir, "src"), { recursive: true });
+    await writeFile(
+      join(dir, "src", "client.ts"),
+      "const key = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;\n"
+    );
+
+    const findings = await findExposedServiceRoleKeys(dir);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].description).not.toContain("ke-track di git");
+    expect(findings[0].description).not.toContain("gitignored atau belum ke-commit");
   });
 });

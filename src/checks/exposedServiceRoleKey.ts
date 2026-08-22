@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { basename, extname, relative, sep } from "node:path";
 import { collectFiles, SOURCE_EXTENSIONS } from "./fsWalk.js";
+import { envFileTrackingContext, listTrackedFiles } from "./gitUtils.js";
 import type { Finding } from "./types.js";
 
 // NEXT_PUBLIC_* env vars get inlined into the client bundle at build time —
@@ -32,16 +33,18 @@ function isScannableFile(filePath: string): boolean {
 
 export async function findExposedServiceRoleKeys(targetDir: string): Promise<Finding[]> {
   const files = await collectFiles(targetDir, isScannableFile);
+  const tracked = await listTrackedFiles(targetDir);
   const findings: Finding[] = [];
 
   for (const file of files) {
     const content = await readFile(file, "utf8");
+    const relFile = relative(targetDir, file).split(sep).join("/");
     for (const match of scanTextForExposedServiceRoleKey(content)) {
       findings.push({
-        file: relative(targetDir, file).split(sep).join("/"),
+        file: relFile,
         line: match.line,
         ruleId: "supabase-service-role-key-public-env",
-        description: `Env var publik "${match.variableName}" kelihatan nyimpen Supabase service role key — Next.js bakal inline ini ke client bundle.`,
+        description: `Env var publik "${match.variableName}" kelihatan nyimpen Supabase service role key — Next.js bakal inline ini ke client bundle.${envFileTrackingContext(relFile, tracked)}`,
       });
     }
   }
