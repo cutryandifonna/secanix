@@ -7,7 +7,9 @@ import { pathToFileURL } from "node:url";
 import { findMissingApiAuth, SemgrepNotFoundError } from "./checks/apiAuthMissing.js";
 import { findCorsWildcard } from "./checks/corsWildcard.js";
 import { findDependencyVulnerabilities, OsvScannerNotFoundError } from "./checks/dependencyVulnerabilities.js";
+import { findExposedFirebaseAdminKeys } from "./checks/exposedFirebaseAdminKey.js";
 import { findExposedServiceRoleKeys } from "./checks/exposedServiceRoleKey.js";
+import { findOpenFirebaseRules } from "./checks/firebaseRulesOpen.js";
 import { findRlsDisabledTables } from "./checks/rlsDisabled.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
 import { applyIgnoreRules, buildReport, formatReport, type CheckFindings, type IgnoreRule } from "./report.js";
@@ -92,6 +94,11 @@ export async function run(targetDir: string = process.cwd(), options: RunOptions
 
   checkFindings.push({ checkId: "rls-disabled", findings: await findRlsDisabledTables(targetDir) });
   checkFindings.push({ checkId: "cors-wildcard", findings: await findCorsWildcard(targetDir) });
+  checkFindings.push({ checkId: "firebase-rules-open", findings: await findOpenFirebaseRules(targetDir) });
+  checkFindings.push({
+    checkId: "firebase-admin-key-exposed",
+    findings: await findExposedFirebaseAdminKeys(targetDir),
+  });
 
   try {
     checkFindings.push({

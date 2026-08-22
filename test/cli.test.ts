@@ -9,6 +9,8 @@ const findMissingApiAuth = vi.fn();
 const findRlsDisabledTables = vi.fn();
 const findCorsWildcard = vi.fn();
 const findDependencyVulnerabilities = vi.fn();
+const findOpenFirebaseRules = vi.fn();
+const findExposedFirebaseAdminKeys = vi.fn();
 
 vi.mock("../src/checks/secretScan.js", async () => {
   const actual = await vi.importActual<typeof import("../src/checks/secretScan.js")>(
@@ -70,6 +72,26 @@ vi.mock("../src/checks/dependencyVulnerabilities.js", async () => {
   };
 });
 
+vi.mock("../src/checks/firebaseRulesOpen.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/checks/firebaseRulesOpen.js")>(
+    "../src/checks/firebaseRulesOpen.js"
+  );
+  return {
+    ...actual,
+    findOpenFirebaseRules: (...args: unknown[]) => findOpenFirebaseRules(...args),
+  };
+});
+
+vi.mock("../src/checks/exposedFirebaseAdminKey.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/checks/exposedFirebaseAdminKey.js")>(
+    "../src/checks/exposedFirebaseAdminKey.js"
+  );
+  return {
+    ...actual,
+    findExposedFirebaseAdminKeys: (...args: unknown[]) => findExposedFirebaseAdminKeys(...args),
+  };
+});
+
 const { run } = await import("../src/cli.js");
 const { GitleaksNotFoundError } = await import("../src/checks/secretScan.js");
 const { SemgrepNotFoundError } = await import("../src/checks/apiAuthMissing.js");
@@ -88,6 +110,10 @@ describe("run", () => {
     findCorsWildcard.mockResolvedValue([]);
     findDependencyVulnerabilities.mockReset();
     findDependencyVulnerabilities.mockResolvedValue([]);
+    findOpenFirebaseRules.mockReset();
+    findOpenFirebaseRules.mockResolvedValue([]);
+    findExposedFirebaseAdminKeys.mockReset();
+    findExposedFirebaseAdminKeys.mockResolvedValue([]);
   });
 
   it("returns exit code 0 and reports zero findings", async () => {

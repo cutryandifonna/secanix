@@ -39,6 +39,18 @@ const RULE_INFO: Record<string, RuleInfo> = {
     severity: "medium",
     fix: "Ganti '*' jadi daftar origin eksplisit yang emang butuh akses, atau validasi origin secara dinamis di server.",
   },
+  "firebase-rules-open": {
+    severity: "critical",
+    fix: "Ganti 'if true' / '.read'/'.write': true dengan rule yang validasi auth (request.auth != null, dst) — rule default Firebase itu deny-all, jangan di-override jadi allow-all.",
+  },
+  "firebase-admin-key-public-env": {
+    severity: "critical",
+    fix: "Jangan expose Firebase Admin key lewat NEXT_PUBLIC_* — pindahin ke env var server-only, lalu rotate key ini di Firebase Console (Project Settings > Service Accounts) kalau udah sempet ke-deploy.",
+  },
+  "firebase-service-account-key-committed": {
+    severity: "critical",
+    fix: "Hapus file JSON key ini dari repo & git history, rotate key di Firebase Console, generate key baru & simpan di secret manager / env var server-only.",
+  },
 };
 
 // gitleaks (secret-scan) and osv-scanner (dependency-cve) each emit a
