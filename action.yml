@@ -35,7 +35,7 @@ runs:
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
-        npm install --no-save --prefix "$RUNNER_TEMP/secanix-install" secanix@0.1.4
+        npm install --no-save --prefix "$RUNNER_TEMP/secanix-install" secanix@0.1.5
         node "$RUNNER_TEMP/secanix-install/node_modules/secanix/dist/cli.js" --json "$WORKING_DIRECTORY" > "$RUNNER_TEMP/secanix-report.json"
 
     - name: Report results
