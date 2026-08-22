@@ -1,6 +1,6 @@
 {
   "name": "secanix",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": false,
   "description": "Security scanner buat app hasil vibe-coding (Next.js + Supabase/Firebase).",
   "license": "MIT",
