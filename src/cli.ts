@@ -12,6 +12,7 @@ import { findExposedServiceRoleKeys } from "./checks/exposedServiceRoleKey.js";
 import { findOpenFirebaseRules } from "./checks/firebaseRulesOpen.js";
 import { findRlsDisabledTables } from "./checks/rlsDisabled.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
+import { checkLicense } from "./licenseCheck.js";
 import { applyIgnoreRules, buildReport, formatReport, type CheckFindings, type IgnoreRule } from "./report.js";
 
 const IGNORE_FILE = ".secanix.json";
@@ -135,10 +136,32 @@ export async function run(targetDir: string = process.cwd(), options: RunOptions
   return 0;
 }
 
+export async function runLicenseCheck(key: string | undefined): Promise<number> {
+  const result = await checkLicense(key);
+
+  if (result.status === "valid") {
+    console.log("secanix Pro license valid.");
+    return 0;
+  }
+
+  if (result.status === "invalid") {
+    console.error(`secanix Pro license invalid: ${result.message}`);
+    return 1;
+  }
+
+  console.error(`secanix Pro license check inconclusive: ${result.message}`);
+  return 2;
+}
+
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
 if (isMain) {
   const args = process.argv.slice(2);
-  const json = args.includes("--json");
-  const targetDir = args.find((arg) => arg !== "--json" && !arg.startsWith("-"));
-  process.exit(await run(targetDir, { json }));
+
+  if (args[0] === "license-check") {
+    process.exit(await runLicenseCheck(process.env.SECANIX_LICENSE_KEY));
+  } else {
+    const json = args.includes("--json");
+    const targetDir = args.find((arg) => arg !== "--json" && !arg.startsWith("-"));
+    process.exit(await run(targetDir, { json }));
+  }
 }

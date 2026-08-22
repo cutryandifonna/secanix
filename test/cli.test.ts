@@ -92,7 +92,13 @@ vi.mock("../src/checks/exposedFirebaseAdminKey.js", async () => {
   };
 });
 
-const { run } = await import("../src/cli.js");
+const checkLicense = vi.fn();
+
+vi.mock("../src/licenseCheck.js", () => ({
+  checkLicense: (...args: unknown[]) => checkLicense(...args),
+}));
+
+const { run, runLicenseCheck } = await import("../src/cli.js");
 const { GitleaksNotFoundError } = await import("../src/checks/secretScan.js");
 const { SemgrepNotFoundError } = await import("../src/checks/apiAuthMissing.js");
 const { OsvScannerNotFoundError } = await import("../src/checks/dependencyVulnerabilities.js");
@@ -399,5 +405,55 @@ describe("run", () => {
       logSpy.mockRestore();
       errorSpy.mockRestore();
     });
+  });
+});
+
+describe("runLicenseCheck", () => {
+  beforeEach(() => {
+    checkLicense.mockReset();
+  });
+
+  it("returns 0 when the license is valid", async () => {
+    checkLicense.mockResolvedValue({ status: "valid" });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const exitCode = await runLicenseCheck("a-key");
+
+    expect(exitCode).toBe(0);
+    expect(checkLicense).toHaveBeenCalledWith("a-key");
+    logSpy.mockRestore();
+  });
+
+  it("returns 1 and logs the reason when the license is invalid", async () => {
+    checkLicense.mockResolvedValue({ status: "invalid", message: "expired" });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const exitCode = await runLicenseCheck("a-key");
+
+    expect(exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("expired"));
+    errorSpy.mockRestore();
+  });
+
+  it("returns 1 when no key is provided", async () => {
+    checkLicense.mockResolvedValue({ status: "invalid", message: "missing" });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const exitCode = await runLicenseCheck(undefined);
+
+    expect(exitCode).toBe(1);
+    expect(checkLicense).toHaveBeenCalledWith(undefined);
+    errorSpy.mockRestore();
+  });
+
+  it("returns 2 and logs the reason when the check is inconclusive", async () => {
+    checkLicense.mockResolvedValue({ status: "error", message: "timeout" });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const exitCode = await runLicenseCheck("a-key");
+
+    expect(exitCode).toBe(2);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("timeout"));
+    errorSpy.mockRestore();
   });
 });
