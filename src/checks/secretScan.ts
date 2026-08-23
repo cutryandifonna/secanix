@@ -139,15 +139,18 @@ export async function runSecretScan(targetDir: string): Promise<Finding[]> {
 
     const content = await readFile(reportPath, "utf8").catch(() => "");
     const findings = parseGitleaksReport(content);
-    if (respectedFiles === null) return findings;
 
-    // Mirror dir is deleted below; rewrite paths to point at the real project.
-    const mirrorPrefix = scanDir.replace(/\\/g, "/");
+    // gitleaks reports File as an absolute path built from --source (which
+    // is scanDir here, mirror or not) — strip that prefix so every check
+    // agrees on the same targetDir-relative, forward-slash file format.
+    // Mirror dir is deleted below, so this also rewrites mirror paths to
+    // point at the real project instead of the throwaway copy.
+    const scanDirPrefix = scanDir.replace(/\\/g, "/");
     return findings.map((finding) => {
       const fileFwd = finding.file.replace(/\\/g, "/");
-      if (!fileFwd.startsWith(mirrorPrefix)) return finding;
-      const rel = fileFwd.slice(mirrorPrefix.length).replace(/^\/+/, "");
-      return { ...finding, file: join(targetDir, rel) };
+      if (!fileFwd.startsWith(scanDirPrefix)) return { ...finding, file: fileFwd };
+      const rel = fileFwd.slice(scanDirPrefix.length).replace(/^\/+/, "");
+      return { ...finding, file: rel };
     });
   } finally {
     await rm(tempDir, { recursive: true, force: true });

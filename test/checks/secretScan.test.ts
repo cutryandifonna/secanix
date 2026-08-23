@@ -102,10 +102,12 @@ describe("runSecretScan", () => {
 
     const findings = await runSecretScan(dir);
 
+    // Regression: this project isn't a git repo, so no gitignore-filter
+    // mirror is built and gitleaks scans targetDir directly — its absolute
+    // File path must still get rewritten to targetDir-relative, like every
+    // other check, not returned as-is.
     const files = findings.map((f) => f.file.replace(/\\/g, "/"));
-    expect(files.some((f) => f.includes("src/config.ts"))).toBe(true);
-    expect(files.some((f) => f.includes(".next"))).toBe(false);
-    expect(files.some((f) => f.includes("node_modules"))).toBe(false);
+    expect(files).toEqual(["src/config.ts"]);
   });
 
   it("skips files gitignored in the target repo (e.g. .env)", async () => {
@@ -121,13 +123,12 @@ describe("runSecretScan", () => {
     expect(files.some((f) => f.includes("src/config.ts"))).toBe(true);
     expect(files.some((f) => f.includes(".env"))).toBe(false);
 
-    // Regression: findings must point at the real project file, not the
-    // throwaway gitignore-filter mirror dir that gets deleted after the scan.
-    const dirFwd = dir.replace(/\\/g, "/");
+    // Regression: findings must be relative to targetDir (matching every
+    // other check), not the throwaway gitignore-filter mirror dir that gets
+    // deleted after the scan, and not an absolute path either.
     for (const finding of findings) {
       const fileFwd = finding.file.replace(/\\/g, "/");
-      expect(fileFwd.startsWith(dirFwd)).toBe(true);
-      expect(fileFwd.includes("mirror")).toBe(false);
+      expect(fileFwd).toBe("src/config.ts");
     }
   });
 
@@ -138,6 +139,6 @@ describe("runSecretScan", () => {
     const findings = await runSecretScan(dir);
 
     const files = findings.map((f) => f.file.replace(/\\/g, "/"));
-    expect(files.some((f) => f.includes(".env"))).toBe(true);
+    expect(files).toEqual([".env"]);
   });
 });
