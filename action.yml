@@ -42,7 +42,7 @@ runs:
           echo "::warning::Could not verify secanix Pro license (LemonSqueezy unreachable) — continuing scan."
           exit 0
         else
-          echo "::error::secanix Pro license invalid or missing. Subscribe at secanix.com/pricing and pass license-key: \${{ secrets.SECANIX_LICENSE_KEY }} to this action."
+          echo "::error::secanix Pro license invalid or missing. Subscribe at secanix.com/pricing and pass your license key via this action's license-key input (e.g. from a repo secret named SECANIX_LICENSE_KEY)."
           exit 1
         fi
 
