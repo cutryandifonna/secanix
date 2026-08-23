@@ -6,7 +6,7 @@ inputs:
     required: false
     default: "."
   license-key:
-    description: "Secanix Pro license key (from LemonSqueezy). Pass as license-key: ${{ secrets.SECANIX_LICENSE_KEY }}."
+    description: "Secanix Pro license key (from LemonSqueezy). Pass via the license-key input, e.g. from a repo secret named SECANIX_LICENSE_KEY."
     required: false
     default: ""
 runs:
