@@ -77,4 +77,6 @@ jobs:
 
 Get a license key by subscribing at [secanix.com/pricing](https://secanix.com/pricing), then add it as a repository secret named `SECANIX_LICENSE_KEY`. Without a valid key, the job stops before any scan runs.
 
+**Breaking change for existing `@v1` users:** the action now requires a valid license key. If your workflow pinned `@v1` before this check was added and doesn't set `license-key`, CI will start failing on the next run until you add the `SECANIX_LICENSE_KEY` secret.
+
 The action fails CI when a critical finding is present (leaked secret, exposed Supabase service role key, or RLS disabled). It posts and updates a single PR comment listing all findings by severity. This requires the consuming workflow to grant `permissions: pull-requests: write` itself, as shown above — without it, comment posting fails with a 403. GitHub-hosted `ubuntu-latest` runners (uses `sudo` for tool installs — self-hosted runners need equivalent permissions).

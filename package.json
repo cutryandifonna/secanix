@@ -23,7 +23,8 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-rules.mjs",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
