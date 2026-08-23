@@ -1,0 +1,12 @@
+name: E2E License Gate Test
+on: pull_request
+permissions:
+  pull-requests: write
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cutryandifonna/secanix@v1
+        with:
+          license-key: ${{ secrets.SECANIX_TEST_LICENSE_KEY }}
