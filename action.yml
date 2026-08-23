@@ -5,6 +5,10 @@ inputs:
     description: "Directory to scan, relative to the repo root."
     required: false
     default: "."
+  license-key:
+    description: "Secanix Pro license key (from LemonSqueezy). Pass as license-key: ${{ secrets.SECANIX_LICENSE_KEY }}."
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -12,6 +16,35 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: 20
+
+    - name: Install secanix CLI
+      shell: bash
+      run: npm install --no-save --prefix "$RUNNER_TEMP/secanix-install" secanix@0.1.6
+
+    - name: Check Pro license
+      shell: bash
+      env:
+        SECANIX_LICENSE_KEY: ${{ inputs.license-key }}
+      run: |
+        # GitHub Actions runs `shell: bash` steps with `-e`, which would abort
+        # this script the instant `node ...` exits non-zero — before the next
+        # line could read $?. The if/else below captures the real exit code
+        # without tripping that.
+        if node "$RUNNER_TEMP/secanix-install/node_modules/secanix/dist/cli.js" license-check; then
+          code=0
+        else
+          code=$?
+        fi
+
+        if [ "$code" -eq 0 ]; then
+          exit 0
+        elif [ "$code" -eq 2 ]; then
+          echo "::warning::Could not verify secanix Pro license (LemonSqueezy unreachable) — continuing scan."
+          exit 0
+        else
+          echo "::error::secanix Pro license invalid or missing. Subscribe at secanix.com/pricing and pass license-key: \${{ secrets.SECANIX_LICENSE_KEY }} to this action."
+          exit 1
+        fi
 
     - name: Install gitleaks
       shell: bash
@@ -35,7 +68,6 @@ runs:
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
-        npm install --no-save --prefix "$RUNNER_TEMP/secanix-install" secanix@0.1.5
         node "$RUNNER_TEMP/secanix-install/node_modules/secanix/dist/cli.js" --json "$WORKING_DIRECTORY" > "$RUNNER_TEMP/secanix-report.json"
 
     - name: Report results

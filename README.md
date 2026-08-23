@@ -58,7 +58,7 @@ output.
 
 ## GitHub Action
 
-Add to `.github/workflows/security-scan.yml` in your repo:
+Requires a Secanix Pro subscription. Add to `.github/workflows/security-scan.yml` in your repo:
 
 ```yaml
 name: Security Scan
@@ -71,6 +71,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cutryandifonna/secanix@v1
+        with:
+          license-key: ${{ secrets.SECANIX_LICENSE_KEY }}
 ```
+
+Get a license key by subscribing at [secanix.com/pricing](https://secanix.com/pricing), then add it as a repository secret named `SECANIX_LICENSE_KEY`. Without a valid key, the job stops before any scan runs.
 
 The action fails CI when a critical finding is present (leaked secret, exposed Supabase service role key, or RLS disabled). It posts and updates a single PR comment listing all findings by severity. This requires the consuming workflow to grant `permissions: pull-requests: write` itself, as shown above — without it, comment posting fails with a 403. GitHub-hosted `ubuntu-latest` runners (uses `sudo` for tool installs — self-hosted runners need equivalent permissions).
