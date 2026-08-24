@@ -26,6 +26,12 @@ describe("classify", () => {
     expect(result.fixSuggestion).toContain("rotate");
   });
 
+  it("classifies any secret-scan-history finding as critical with a history-specific fix", () => {
+    const result = classify(finding({ ruleId: "aws-access-key" }), "secret-scan-history");
+    expect(result.severity).toBe("critical");
+    expect(result.fixSuggestion).toContain("history");
+  });
+
   it("derives dependency-cve severity from the embedded CVSS score", () => {
     expect(classify(finding({ description: "x@1 kena kerentanan (severity 9.5)." }), "dependency-cve").severity).toBe(
       "critical"

@@ -58,6 +58,8 @@ const RULE_INFO: Record<string, RuleInfo> = {
 // classified by checkId instead of an exhaustive per-ruleId table.
 const SECRET_SCAN_FIX =
   "Cabut/rotate secret ini sekarang, hapus dari kode & git history (bukan cuma commit baru), pindahin ke env var / secret manager.";
+const SECRET_SCAN_HISTORY_FIX =
+  "Secret ini pernah ke-commit ke git history — meski udah dihapus dari working tree, tetap ada di history dan bisa diakses siapapun yang clone repo. Cabut/rotate kalau masih aktif, lalu bersihin history-nya (git filter-repo / BFG Repo-Cleaner).";
 const DEPENDENCY_CVE_FIX = "Update dependency ini ke versi yang udah di-patch (cek advisory-nya buat versi aman).";
 const DEFAULT_FIX = "Cek temuan ini manual — belum ada saran otomatis buat rule ini.";
 
@@ -84,6 +86,10 @@ export function classify(finding: Finding, checkId: string): ReportedFinding {
 
   if (checkId === "secret-scan") {
     return { ...finding, severity: "critical", fixSuggestion: SECRET_SCAN_FIX };
+  }
+
+  if (checkId === "secret-scan-history") {
+    return { ...finding, severity: "critical", fixSuggestion: SECRET_SCAN_HISTORY_FIX };
   }
 
   if (checkId === "dependency-cve") {

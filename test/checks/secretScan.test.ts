@@ -58,6 +58,38 @@ describe("parseGitleaksReport", () => {
     ]);
   });
 
+  it("appends commit hash and date to description when Commit is present (history scan mode)", () => {
+    const report = JSON.stringify([
+      {
+        File: "src/db.ts",
+        StartLine: 12,
+        RuleID: "aws-access-key",
+        Description: "AWS Access Key",
+        Commit: "abcdef1234567890",
+        Date: "2026-08-01T00:00:00Z",
+      },
+    ]);
+
+    expect(parseGitleaksReport(report)).toEqual([
+      {
+        file: "src/db.ts",
+        line: 12,
+        ruleId: "aws-access-key",
+        description: "AWS Access Key (commit abcdef1, 2026-08-01T00:00:00Z)",
+      },
+    ]);
+  });
+
+  it("does not append commit info when Commit is an empty string (working-tree scan mode)", () => {
+    const report = JSON.stringify([
+      { File: "src/db.ts", StartLine: 12, RuleID: "aws-access-key", Description: "AWS Access Key", Commit: "" },
+    ]);
+
+    expect(parseGitleaksReport(report)).toEqual([
+      { file: "src/db.ts", line: 12, ruleId: "aws-access-key", description: "AWS Access Key" },
+    ]);
+  });
+
   it("skips entries missing required fields", () => {
     const report = JSON.stringify([
       { File: "a.ts", StartLine: 1 },

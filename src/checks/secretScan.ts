@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { Finding } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = join(__dirname, "..", "rules", "gitleaks-config.toml");
+export const GITLEAKS_CONFIG_PATH = join(__dirname, "..", "rules", "gitleaks-config.toml");
 
 export class GitleaksNotFoundError extends Error {
   constructor() {
@@ -20,9 +20,11 @@ interface GitleaksRawFinding {
   StartLine?: number;
   RuleID?: string;
   Description?: string;
+  Commit?: string;
+  Date?: string;
 }
 
-function runGitleaksProcess(args: string[]): Promise<void> {
+export function runGitleaksProcess(args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn("gitleaks", args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
@@ -64,11 +66,16 @@ export function parseGitleaksReport(json: string): Finding[] {
     ) {
       continue;
     }
+    let description = entry.Description ?? entry.RuleID;
+    if (entry.Commit) {
+      description += ` (commit ${entry.Commit.slice(0, 7)}, ${entry.Date ?? "?"})`;
+    }
+
     findings.push({
       file: entry.File,
       line: entry.StartLine,
       ruleId: entry.RuleID,
-      description: entry.Description ?? entry.RuleID,
+      description,
     });
   }
   return findings;
@@ -128,7 +135,7 @@ export async function runSecretScan(targetDir: string): Promise<Finding[]> {
       "--no-git",
       "--no-banner",
       "--config",
-      CONFIG_PATH,
+      GITLEAKS_CONFIG_PATH,
       "--report-format",
       "json",
       "--report-path",

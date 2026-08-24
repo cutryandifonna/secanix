@@ -12,6 +12,7 @@ import { findExposedServiceRoleKeys } from "./checks/exposedServiceRoleKey.js";
 import { findOpenFirebaseRules } from "./checks/firebaseRulesOpen.js";
 import { findRlsDisabledTables } from "./checks/rlsDisabled.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
+import { runSecretScanHistory } from "./checks/secretScanHistory.js";
 import { checkLicense } from "./licenseCheck.js";
 import { applyIgnoreRules, buildReport, formatReport, type CheckFindings, type IgnoreRule } from "./report.js";
 
@@ -77,6 +78,11 @@ export async function run(targetDir: string = process.cwd(), options: RunOptions
     }
     throw err;
   }
+
+  checkFindings.push({
+    checkId: "secret-scan-history",
+    findings: await runSecretScanHistory(targetDir),
+  });
 
   checkFindings.push({
     checkId: "exposed-service-role-key",
