@@ -13,6 +13,17 @@ const PUBLIC_ADMIN_KEY_PATTERN = /NEXT_PUBLIC_[A-Z0-9_]*(?:FIREBASE_PRIVATE_KEY|
 // key JSON.stringify produces, so a committed key file slips past secret-scan.
 const SERVICE_ACCOUNT_JSON_PATTERN = /"type"\s*:\s*"service_account"/;
 
+// Unlike the .env pattern above (via envFileTrackingContext), a real key
+// file's severity doesn't change if it's untracked — leaving a live key
+// on disk is already critical. But "hapus dari git history" (report.ts fix
+// suggestion) only applies once it's actually in git, so say so accurately.
+function serviceAccountTrackingContext(relFile: string, tracked: Set<string> | null): string {
+  if (tracked === null) return "";
+  return tracked.has(relFile)
+    ? " Private key literal ini ke-commit ke repo — hapus juga dari git history, bukan cuma commit baru."
+    : " File ini belum ke-track di git — hapus/gitignore sebelum sempet ke-commit, dan tetep rotate key-nya.";
+}
+
 function isScannableFile(filePath: string): boolean {
   const name = basename(filePath);
   if (name.startsWith(".env")) return true;
@@ -60,7 +71,7 @@ export async function findExposedFirebaseAdminKeys(targetDir: string): Promise<F
         file: relFile,
         line: match.line,
         ruleId: "firebase-service-account-key-committed",
-        description: `File ini kelihatan kayak service account key JSON asli dari Firebase Admin SDK — private key literal ke-commit ke repo.`,
+        description: `File ini kelihatan kayak service account key JSON asli dari Firebase Admin SDK.${serviceAccountTrackingContext(relFile, tracked)}`,
       });
     }
   }

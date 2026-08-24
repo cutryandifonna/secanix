@@ -1,0 +1,29 @@
+{
+  "ignore": [
+    {
+      "file": "test/checks/exposedServiceRoleKey.test.ts",
+      "ruleId": "supabase-service-role-key-public-env",
+      "reason": "test fixtures for this check's own detection logic, not a real leaked key"
+    },
+    {
+      "file": "test/checks/exposedFirebaseAdminKey.test.ts",
+      "ruleId": "firebase-admin-key-public-env",
+      "reason": "test fixtures for this check's own detection logic, not a real leaked key"
+    },
+    {
+      "file": "test/checks/exposedFirebaseAdminKey.test.ts",
+      "ruleId": "firebase-service-account-key-committed",
+      "reason": "test fixtures for this check's own detection logic, not a real service account key"
+    },
+    {
+      "file": "src/checks/corsWildcard.ts",
+      "ruleId": "cors-wildcard-origin",
+      "reason": "doc comments illustrating the exact patterns this check matches, not a real CORS misconfiguration"
+    },
+    {
+      "file": "test/checks/corsWildcard.test.ts",
+      "ruleId": "cors-wildcard-origin",
+      "reason": "test fixtures for this check's own detection logic, not a real CORS misconfiguration"
+    }
+  ]
+}

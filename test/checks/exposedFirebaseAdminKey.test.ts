@@ -127,4 +127,25 @@ describe("findExposedFirebaseAdminKeys", () => {
     expect(findings).toHaveLength(1);
     expect(findings[0].description).toContain("gitignored atau belum ke-commit");
   });
+
+  it("notes the service account key is git-tracked when the file is staged", async () => {
+    await execFileAsync("git", ["init", "-q"], { cwd: dir });
+    await writeFile(join(dir, "serviceAccountKey.json"), '{"type": "service_account"}\n');
+    await execFileAsync("git", ["add", "serviceAccountKey.json"], { cwd: dir });
+
+    const findings = await findExposedFirebaseAdminKeys(dir);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].description).toContain("ke-commit ke repo");
+  });
+
+  it("notes the service account key is untracked when the file is not staged", async () => {
+    await execFileAsync("git", ["init", "-q"], { cwd: dir });
+    await writeFile(join(dir, "serviceAccountKey.json"), '{"type": "service_account"}\n');
+
+    const findings = await findExposedFirebaseAdminKeys(dir);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].description).toContain("belum ke-track di git");
+  });
 });
