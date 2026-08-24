@@ -7,6 +7,7 @@ Security scanner buat app hasil vibe-coding (Next.js + Supabase/Firebase).
 | Check | ruleId | Severity | Triggers on | Fix |
 |---|---|---|---|---|
 | Leaked secrets (gitleaks) | varies per gitleaks rule | Critical | Hardcoded API key/token/credential in a git-tracked or about-to-be-tracked file | Rotate the secret now, strip it from code & git history (not just a new commit), move it to an env var / secret manager |
+| Leaked secrets in git history (gitleaks) | varies per gitleaks rule | Critical | A secret found anywhere in `git log`, even if it's since been removed from the working tree | Rotate the secret if it's still active, then scrub it from history with `git filter-repo` / BFG Repo-Cleaner |
 | Exposed Supabase service role key | `supabase-service-role-key-public-env` | Critical | `NEXT_PUBLIC_*` env var holding a Supabase service role key — gets inlined into the client bundle at build time | Move it to a server-only env var, rotate the key in the Supabase dashboard if it's ever been deployed |
 | Missing auth on Next.js API route | `nextjs-api-route-missing-auth` | High | A Pages/App Router API handler with no session/token check before it runs any logic | Add an auth check (`getServerSession`/`getToken`/etc.) at the top of the handler |
 | Supabase RLS disabled | `supabase-rls-disabled` | Critical | A table where RLS was explicitly turned off | Re-enable RLS (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`) and add matching policies |
@@ -55,6 +56,13 @@ Both `file` (relative path) and `ruleId` must match exactly. Suppressed
 findings aren't silently dropped — they're printed separately (with your
 `reason`) so they stay visible for review, not just filtered out of the JSON
 output.
+
+Add an optional `"checkId"` (e.g. `"secret-scan"` for the working-tree leaked
+secrets check, `"secret-scan-history"` for the git-history one) to scope the
+rule to one check only. Without it, the rule matches that `file`+`ruleId`
+from any check — useful when two checks can report the same file+ruleId with
+different meaning (e.g. a secret still present today vs. one only found in
+git history).
 
 ## GitHub Action
 

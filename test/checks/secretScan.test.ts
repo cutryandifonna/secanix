@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -45,9 +46,36 @@ describe("parseGitleaksReport", () => {
     const findings = parseGitleaksReport(report);
 
     expect(findings).toEqual([
-      { file: "src/db.ts", line: 12, ruleId: "aws-access-key", description: "AWS Access Key" },
+      {
+        file: "src/db.ts",
+        line: 12,
+        ruleId: "aws-access-key",
+        description: "AWS Access Key",
+        secretHash: createHash("sha256").update("AKIA_SUPER_SECRET_VALUE").digest("hex"),
+      },
     ]);
     expect(JSON.stringify(findings)).not.toContain("AKIA_SUPER_SECRET_VALUE");
+  });
+
+  it("gives two different secrets of the same rule in the same file different hashes", () => {
+    const report = JSON.stringify([
+      { File: "src/config.ts", StartLine: 3, RuleID: "aws-access-key", Secret: "AKIA_OLD_ROTATED_VALUE" },
+      { File: "src/config.ts", StartLine: 9, RuleID: "aws-access-key", Secret: "AKIA_CURRENT_VALUE" },
+    ]);
+
+    const findings = parseGitleaksReport(report);
+
+    expect(findings[0].secretHash).toBeTypeOf("string");
+    expect(findings[0].secretHash).not.toBe(findings[1].secretHash);
+  });
+
+  it("leaves secretHash unset when the gitleaks entry carries no Secret field", () => {
+    const report = JSON.stringify([{ File: "a.ts", StartLine: 1, RuleID: "generic-secret" }]);
+
+    const findings = parseGitleaksReport(report);
+
+    expect(findings[0].secretHash).toBeUndefined();
+    expect(JSON.stringify(findings)).not.toContain("secretHash");
   });
 
   it("falls back to ruleId as description when description is missing", () => {

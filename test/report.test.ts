@@ -56,6 +56,11 @@ describe("classify", () => {
     expect(result.severity).toBe("medium");
     expect(result.fixSuggestion).toContain("manual");
   });
+
+  it("attaches the checkId to the classified finding", () => {
+    const result = classify(finding({ ruleId: "cors-wildcard-origin" }), "cors-wildcard");
+    expect(result.checkId).toBe("cors-wildcard");
+  });
 });
 
 describe("buildReport", () => {
@@ -113,6 +118,38 @@ describe("applyIgnoreRules", () => {
 
     expect(result.findings).toHaveLength(1);
     expect(result.suppressed).toEqual([]);
+  });
+
+  it("an ignore rule scoped to a checkId only suppresses that check's finding, not another check's finding with the same file+ruleId", () => {
+    // Regression: secret-scan and secret-scan-history can legitimately
+    // report the same file+ruleId with different remediation meaning
+    // (still-present vs. history-only) — an ignore rule meant for one
+    // shouldn't silently swallow the other.
+    const reported = buildReport([
+      { checkId: "secret-scan", findings: [finding({ ruleId: "aws-access-key", file: "a.ts" })] },
+      { checkId: "secret-scan-history", findings: [finding({ ruleId: "aws-access-key", file: "a.ts" })] },
+    ]);
+
+    const result = applyIgnoreRules(reported, [
+      { file: "a.ts", ruleId: "aws-access-key", checkId: "secret-scan" },
+    ]);
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].checkId).toBe("secret-scan-history");
+    expect(result.suppressed).toHaveLength(1);
+    expect(result.suppressed[0].checkId).toBe("secret-scan");
+  });
+
+  it("an ignore rule without a checkId suppresses matching file+ruleId findings from every check (backward compatible)", () => {
+    const reported = buildReport([
+      { checkId: "secret-scan", findings: [finding({ ruleId: "aws-access-key", file: "a.ts" })] },
+      { checkId: "secret-scan-history", findings: [finding({ ruleId: "aws-access-key", file: "a.ts" })] },
+    ]);
+
+    const result = applyIgnoreRules(reported, [{ file: "a.ts", ruleId: "aws-access-key" }]);
+
+    expect(result.findings).toEqual([]);
+    expect(result.suppressed).toHaveLength(2);
   });
 });
 

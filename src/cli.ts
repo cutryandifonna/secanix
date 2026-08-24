@@ -12,7 +12,7 @@ import { findExposedServiceRoleKeys } from "./checks/exposedServiceRoleKey.js";
 import { findOpenFirebaseRules } from "./checks/firebaseRulesOpen.js";
 import { findRlsDisabledTables } from "./checks/rlsDisabled.js";
 import { GitleaksNotFoundError, runSecretScan } from "./checks/secretScan.js";
-import { runSecretScanHistory } from "./checks/secretScanHistory.js";
+import { excludeFindingsAlreadyInWorkingTree, runSecretScanHistory } from "./checks/secretScanHistory.js";
 import { checkLicense } from "./licenseCheck.js";
 import { applyIgnoreRules, buildReport, formatReport, type CheckFindings, type IgnoreRule } from "./report.js";
 
@@ -41,8 +41,18 @@ export async function loadIgnoreRules(targetDir: string): Promise<IgnoreRule[]> 
         typeof (entry as { file?: unknown }).file === "string" &&
         typeof (entry as { ruleId?: unknown }).ruleId === "string"
       ) {
-        const { file, ruleId, reason } = entry as { file: string; ruleId: string; reason?: unknown };
-        rules.push({ file, ruleId, reason: typeof reason === "string" ? reason : undefined });
+        const { file, ruleId, checkId, reason } = entry as {
+          file: string;
+          ruleId: string;
+          checkId?: unknown;
+          reason?: unknown;
+        };
+        rules.push({
+          file,
+          ruleId,
+          checkId: typeof checkId === "string" ? checkId : undefined,
+          reason: typeof reason === "string" ? reason : undefined,
+        });
       }
     }
     return rules;
@@ -68,9 +78,10 @@ export async function run(targetDir: string = process.cwd(), options: RunOptions
   }
 
   const checkFindings: CheckFindings[] = [];
+  let secretScanFindings: Awaited<ReturnType<typeof runSecretScan>>;
 
   try {
-    checkFindings.push({ checkId: "secret-scan", findings: await runSecretScan(targetDir) });
+    secretScanFindings = await runSecretScan(targetDir);
   } catch (err) {
     if (err instanceof GitleaksNotFoundError) {
       console.error(err.message);
@@ -78,10 +89,21 @@ export async function run(targetDir: string = process.cwd(), options: RunOptions
     }
     throw err;
   }
+  checkFindings.push({ checkId: "secret-scan", findings: secretScanFindings });
 
+  let historyFindings: Awaited<ReturnType<typeof runSecretScanHistory>>;
+  try {
+    historyFindings = await runSecretScanHistory(targetDir);
+  } catch (err) {
+    if (err instanceof GitleaksNotFoundError) {
+      console.error(err.message);
+      return 1;
+    }
+    throw err;
+  }
   checkFindings.push({
     checkId: "secret-scan-history",
-    findings: await runSecretScanHistory(targetDir),
+    findings: excludeFindingsAlreadyInWorkingTree(historyFindings, secretScanFindings),
   });
 
   checkFindings.push({
@@ -131,10 +153,14 @@ export async function run(targetDir: string = process.cwd(), options: RunOptions
     }
   }
 
+  // secretHash is internal dedup plumbing (see checks/types.ts) — drop it
+  // here so it can never reach the user-facing report in any format.
+  const publicFindings = reported.map(({ secretHash: _secretHash, ...rest }) => rest);
+
   if (json) {
-    console.log(JSON.stringify(reported));
+    console.log(JSON.stringify(publicFindings));
   } else {
-    for (const line of formatReport(reported)) {
+    for (const line of formatReport(publicFindings)) {
       console.log(line);
     }
   }

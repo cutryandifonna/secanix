@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { runGit } from "./gitUtils.js";
 import type { Finding } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -22,6 +24,7 @@ interface GitleaksRawFinding {
   Description?: string;
   Commit?: string;
   Date?: string;
+  Secret?: string;
 }
 
 export function runGitleaksProcess(args: string[]): Promise<void> {
@@ -49,7 +52,9 @@ export function runGitleaksProcess(args: string[]): Promise<void> {
 }
 
 // gitleaks report never carries the raw secret value into a Finding here —
-// printing/logging matched secrets would itself be a leak.
+// printing/logging matched secrets would itself be a leak. Only a SHA-256 of
+// it goes in (secretHash), enough for dedup to distinguish two different
+// secrets sharing a file+ruleId, and cli.ts strips even that before output.
 export function parseGitleaksReport(json: string): Finding[] {
   const trimmed = json.trim();
   if (trimmed.length === 0) return [];
@@ -76,33 +81,50 @@ export function parseGitleaksReport(json: string): Finding[] {
       line: entry.StartLine,
       ruleId: entry.RuleID,
       description,
+      ...(entry.Secret ? { secretHash: createHash("sha256").update(entry.Secret).digest("hex") } : {}),
     });
   }
   return findings;
 }
 
+// Shared by every check that shells out to gitleaks: makes a scratch temp
+// dir for the JSON report, runs gitleaks with sourceArgs (the caller
+// supplies whatever --source/--no-git flags fit its own scan mode), parses
+// the result, and always cleans up the temp dir. Callers that need their
+// own temp workspace first (e.g. building a gitignore-filtered mirror)
+// manage that separately — this only owns the report's own temp dir.
+export async function runGitleaksDetectAndParse(sourceArgs: string[], tempDirPrefix: string): Promise<Finding[]> {
+  const tempDir = await mkdtemp(join(tmpdir(), tempDirPrefix));
+  const reportPath = join(tempDir, "gitleaks-report.json");
+
+  try {
+    await runGitleaksProcess([
+      "detect",
+      ...sourceArgs,
+      "--no-banner",
+      "--config",
+      GITLEAKS_CONFIG_PATH,
+      "--report-format",
+      "json",
+      "--report-path",
+      reportPath,
+      "--exit-code",
+      "0",
+    ]);
+
+    const content = await readFile(reportPath, "utf8").catch(() => "");
+    return parseGitleaksReport(content);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 // Returns tracked + untracked-but-not-ignored relative paths, or null when
 // targetDir isn't a git repo (no .gitignore semantics to respect there).
-function listGitRespectedFiles(targetDir: string): Promise<string[] | null> {
-  return new Promise((resolve) => {
-    const child = spawn(
-      "git",
-      ["-C", targetDir, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-      { stdio: ["ignore", "pipe", "ignore"] }
-    );
-    let stdout = "";
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    child.on("error", () => resolve(null));
-    child.on("close", (code) => {
-      if (code !== 0) {
-        resolve(null);
-        return;
-      }
-      resolve(stdout.split("\0").filter((f) => f.length > 0));
-    });
-  });
+async function listGitRespectedFiles(targetDir: string): Promise<string[] | null> {
+  const stdout = await runGit(["-C", targetDir, "ls-files", "-z", "--cached", "--others", "--exclude-standard"]);
+  if (stdout === null) return null;
+  return stdout.split("\0").filter((f) => f.length > 0);
 }
 
 // Mirrors the given relative paths into mirrorRoot so gitleaks (run with
@@ -116,36 +138,18 @@ async function mirrorFiles(sourceDir: string, files: string[], mirrorRoot: strin
 }
 
 export async function runSecretScan(targetDir: string): Promise<Finding[]> {
-  const tempDir = await mkdtemp(join(tmpdir(), "vibe-secret-scan-"));
-  const reportPath = join(tempDir, "gitleaks-report.json");
+  const mirrorTempDir = await mkdtemp(join(tmpdir(), "vibe-secret-scan-mirror-"));
 
   try {
     const respectedFiles = await listGitRespectedFiles(targetDir);
     let scanDir = targetDir;
     if (respectedFiles !== null) {
-      scanDir = join(tempDir, "mirror");
+      scanDir = join(mirrorTempDir, "mirror");
       await mkdir(scanDir, { recursive: true });
       await mirrorFiles(targetDir, respectedFiles, scanDir);
     }
 
-    await runGitleaksProcess([
-      "detect",
-      "--source",
-      scanDir,
-      "--no-git",
-      "--no-banner",
-      "--config",
-      GITLEAKS_CONFIG_PATH,
-      "--report-format",
-      "json",
-      "--report-path",
-      reportPath,
-      "--exit-code",
-      "0",
-    ]);
-
-    const content = await readFile(reportPath, "utf8").catch(() => "");
-    const findings = parseGitleaksReport(content);
+    const findings = await runGitleaksDetectAndParse(["--source", scanDir, "--no-git"], "vibe-secret-scan-report-");
 
     // gitleaks reports File as an absolute path built from --source (which
     // is scanDir here, mirror or not) — strip that prefix so every check
@@ -160,6 +164,6 @@ export async function runSecretScan(targetDir: string): Promise<Finding[]> {
       return { ...finding, file: rel };
     });
   } finally {
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(mirrorTempDir, { recursive: true, force: true });
   }
 }
