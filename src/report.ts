@@ -3,6 +3,7 @@ import type { Finding } from "./checks/types.js";
 export type Severity = "critical" | "high" | "medium" | "low";
 
 export interface ReportedFinding extends Finding {
+  checkId: string;
   severity: Severity;
   fixSuggestion: string;
 }
@@ -58,6 +59,8 @@ const RULE_INFO: Record<string, RuleInfo> = {
 // classified by checkId instead of an exhaustive per-ruleId table.
 const SECRET_SCAN_FIX =
   "Cabut/rotate secret ini sekarang, hapus dari kode & git history (bukan cuma commit baru), pindahin ke env var / secret manager.";
+const SECRET_SCAN_HISTORY_FIX =
+  "Secret ini pernah ke-commit ke git history — meski udah dihapus dari working tree, tetap ada di history dan bisa diakses siapapun yang clone repo. Cabut/rotate kalau masih aktif, lalu bersihin history-nya (git filter-repo / BFG Repo-Cleaner).";
 const DEPENDENCY_CVE_FIX = "Update dependency ini ke versi yang udah di-patch (cek advisory-nya buat versi aman).";
 const DEFAULT_FIX = "Cek temuan ini manual — belum ada saran otomatis buat rule ini.";
 
@@ -79,27 +82,33 @@ function severityFromDescription(description: string): Severity | undefined {
 export function classify(finding: Finding, checkId: string): ReportedFinding {
   const ruleInfo = RULE_INFO[finding.ruleId];
   if (ruleInfo) {
-    return { ...finding, severity: ruleInfo.severity, fixSuggestion: ruleInfo.fix };
+    return { ...finding, checkId, severity: ruleInfo.severity, fixSuggestion: ruleInfo.fix };
   }
 
   if (checkId === "secret-scan") {
-    return { ...finding, severity: "critical", fixSuggestion: SECRET_SCAN_FIX };
+    return { ...finding, checkId, severity: "critical", fixSuggestion: SECRET_SCAN_FIX };
+  }
+
+  if (checkId === "secret-scan-history") {
+    return { ...finding, checkId, severity: "critical", fixSuggestion: SECRET_SCAN_HISTORY_FIX };
   }
 
   if (checkId === "dependency-cve") {
     return {
       ...finding,
+      checkId,
       severity: severityFromDescription(finding.description) ?? "high",
       fixSuggestion: DEPENDENCY_CVE_FIX,
     };
   }
 
-  return { ...finding, severity: "medium", fixSuggestion: DEFAULT_FIX };
+  return { ...finding, checkId, severity: "medium", fixSuggestion: DEFAULT_FIX };
 }
 
 export interface IgnoreRule {
   file: string;
   ruleId: string;
+  checkId?: string;
   reason?: string;
 }
 
@@ -114,12 +123,19 @@ export interface AppliedIgnoreRules {
 
 // file+ruleId must both match — narrow on purpose so an ignore entry never
 // silently swallows an unrelated finding that happens to share one field.
+// checkId is optional on the rule: omitted matches any check (backward
+// compatible with existing .secanix.json files); set, it only matches that
+// one check — needed because two different checks (e.g. secret-scan and
+// secret-scan-history) can legitimately report the same file+ruleId with
+// different remediation meaning.
 export function applyIgnoreRules(reported: ReportedFinding[], ignoreRules: IgnoreRule[]): AppliedIgnoreRules {
   const findings: ReportedFinding[] = [];
   const suppressed: SuppressedFinding[] = [];
 
   for (const finding of reported) {
-    const rule = ignoreRules.find((r) => r.file === finding.file && r.ruleId === finding.ruleId);
+    const rule = ignoreRules.find(
+      (r) => r.file === finding.file && r.ruleId === finding.ruleId && (!r.checkId || r.checkId === finding.checkId)
+    );
     if (rule) {
       suppressed.push({ ...finding, reason: rule.reason });
     } else {

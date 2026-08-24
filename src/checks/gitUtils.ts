@@ -1,27 +1,32 @@
 import { spawn } from "node:child_process";
 import { basename } from "node:path";
 
-// Returns the set of forward-slash relative paths staged/committed in
-// targetDir's git index, or null when targetDir isn't a git repo (no
-// tracking info to report).
-export function listTrackedFiles(targetDir: string): Promise<Set<string> | null> {
+// Runs `git <args>` and returns raw stdout on success (exit code 0), or
+// null when the process errors (e.g. git missing) or exits non-zero (e.g.
+// targetDir isn't a git repo) — every check that shells out to git for a
+// simple "run and read stdout" query builds on this instead of writing its
+// own spawn/collect/resolve-null wrapper.
+export function runGit(args: string[]): Promise<string | null> {
   return new Promise((resolve) => {
-    const child = spawn("git", ["-C", targetDir, "ls-files", "-z", "--cached"], {
-      stdio: ["ignore", "pipe", "ignore"],
-    });
+    const child = spawn("git", args, { stdio: ["ignore", "pipe", "ignore"] });
     let stdout = "";
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
     });
     child.on("error", () => resolve(null));
     child.on("close", (code) => {
-      if (code !== 0) {
-        resolve(null);
-        return;
-      }
-      resolve(new Set(stdout.split("\0").filter((f) => f.length > 0)));
+      resolve(code === 0 ? stdout : null);
     });
   });
+}
+
+// Returns the set of forward-slash relative paths staged/committed in
+// targetDir's git index, or null when targetDir isn't a git repo (no
+// tracking info to report).
+export async function listTrackedFiles(targetDir: string): Promise<Set<string> | null> {
+  const stdout = await runGit(["-C", targetDir, "ls-files", "-z", "--cached"]);
+  if (stdout === null) return null;
+  return new Set(stdout.split("\0").filter((f) => f.length > 0));
 }
 
 const TRACKED_CONTEXT = " File ini ke-track di git — kemungkinan udah ke-commit ke repo.";

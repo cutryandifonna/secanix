@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const runSecretScan = vi.fn();
+const runSecretScanHistory = vi.fn();
 const findExposedServiceRoleKeys = vi.fn();
 const findMissingApiAuth = vi.fn();
 const findRlsDisabledTables = vi.fn();
@@ -19,6 +21,16 @@ vi.mock("../src/checks/secretScan.js", async () => {
   return {
     ...actual,
     runSecretScan: (...args: unknown[]) => runSecretScan(...args),
+  };
+});
+
+vi.mock("../src/checks/secretScanHistory.js", async () => {
+  const actual = await vi.importActual<typeof import("../src/checks/secretScanHistory.js")>(
+    "../src/checks/secretScanHistory.js"
+  );
+  return {
+    ...actual,
+    runSecretScanHistory: (...args: unknown[]) => runSecretScanHistory(...args),
   };
 });
 
@@ -106,6 +118,8 @@ const { OsvScannerNotFoundError } = await import("../src/checks/dependencyVulner
 describe("run", () => {
   beforeEach(() => {
     runSecretScan.mockReset();
+    runSecretScanHistory.mockReset();
+    runSecretScanHistory.mockResolvedValue([]);
     findExposedServiceRoleKeys.mockReset();
     findExposedServiceRoleKeys.mockResolvedValue([]);
     findMissingApiAuth.mockReset();
@@ -169,6 +183,40 @@ describe("run", () => {
     logSpy.mockRestore();
   });
 
+  it("does not double-report a secret that's both currently in the working tree and in git history", async () => {
+    // Regression: any committed secret is, by definition, also in history —
+    // without dedup this would report the same file:line as two separate
+    // CRITICAL findings (secret-scan + secret-scan-history).
+    runSecretScan.mockResolvedValue([
+      { file: "src/db.ts", line: 12, ruleId: "aws-access-key", description: "AWS Access Key" },
+    ]);
+    runSecretScanHistory.mockResolvedValue([
+      { file: "src/db.ts", line: 12, ruleId: "aws-access-key", description: "AWS Access Key (commit abc1234, x)" },
+    ]);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const exitCode = await run("/some/dir");
+
+    expect(exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("1 temuan"));
+    logSpy.mockRestore();
+  });
+
+  it("still reports a history-only secret that's no longer in the working tree", async () => {
+    runSecretScan.mockResolvedValue([]);
+    runSecretScanHistory.mockResolvedValue([
+      { file: "src/old.ts", line: 3, ruleId: "aws-access-key", description: "AWS Access Key (commit abc1234, x)" },
+    ]);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const exitCode = await run("/some/dir");
+
+    expect(exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("1 temuan"));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("src/old.ts:3"));
+    logSpy.mockRestore();
+  });
+
   it("returns exit code 1 when gitleaks is not installed and skips the second check", async () => {
     runSecretScan.mockRejectedValue(new GitleaksNotFoundError());
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -183,6 +231,26 @@ describe("run", () => {
 
   it("rethrows unexpected errors", async () => {
     runSecretScan.mockRejectedValue(new Error("boom"));
+
+    await expect(run("/some/dir")).rejects.toThrow("boom");
+  });
+
+  it("returns exit code 1 when gitleaks fails during the history scan", async () => {
+    runSecretScan.mockResolvedValue([]);
+    runSecretScanHistory.mockRejectedValue(new GitleaksNotFoundError());
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const exitCode = await run("/some/dir");
+
+    expect(exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("gitleaks"));
+    expect(findExposedServiceRoleKeys).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("rethrows unexpected errors from the history scan", async () => {
+    runSecretScan.mockResolvedValue([]);
+    runSecretScanHistory.mockRejectedValue(new Error("boom"));
 
     await expect(run("/some/dir")).rejects.toThrow("boom");
   });
@@ -322,6 +390,31 @@ describe("run", () => {
     logSpy.mockRestore();
   });
 
+  it("never leaks the internal secret hash into --json output or the text report", async () => {
+    // secretHash exists only to disambiguate dedup between secret-scan and
+    // secret-scan-history — it must never reach the user-facing report.
+    // Derived, not a hex literal: a hardcoded 64-char hex string in this file
+    // trips gitleaks' generic-api-key rule when we dogfood the scanner on
+    // our own repo.
+    const secretHash = createHash("sha256").update("not-a-real-secret").digest("hex");
+    runSecretScan.mockResolvedValue([
+      { file: "src/db.ts", line: 12, ruleId: "aws-access-key", description: "AWS Access Key", secretHash },
+    ]);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await run("/some/dir", { json: true });
+
+    const jsonOutput = logSpy.mock.calls[0][0] as string;
+    expect(jsonOutput).not.toContain(secretHash);
+    expect(JSON.parse(jsonOutput)[0]).not.toHaveProperty("secretHash");
+
+    logSpy.mockClear();
+    await run("/some/dir");
+
+    expect(logSpy.mock.calls.map((call) => String(call[0])).join("\n")).not.toContain(secretHash);
+    logSpy.mockRestore();
+  });
+
   describe(".secanix.json ignore rules", () => {
     let dir: string;
 
@@ -370,6 +463,32 @@ describe("run", () => {
 
       expect(exitCode).toBe(0);
       expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toHaveLength(1);
+      logSpy.mockRestore();
+    });
+
+    it("an ignore rule scoped to a checkId does not suppress a different check's finding with the same file+ruleId", async () => {
+      // Regression: before checkId-scoping, an ignore rule written for a
+      // secret-scan finding would also silently swallow an unrelated
+      // secret-scan-history finding that happens to share file+ruleId.
+      // Uses a history-only finding (nothing in secret-scan for this
+      // file+ruleId) so dedup (excludeFindingsAlreadyInWorkingTree) has
+      // nothing to collapse — isolates the checkId-scoping behavior.
+      await writeFile(
+        join(dir, ".secanix.json"),
+        JSON.stringify({ ignore: [{ file: "src/db.ts", ruleId: "aws-access-key", checkId: "secret-scan" }] })
+      );
+      runSecretScan.mockResolvedValue([]);
+      runSecretScanHistory.mockResolvedValue([
+        { file: "src/db.ts", line: 40, ruleId: "aws-access-key", description: "AWS Access Key (commit abc1234, x)" },
+      ]);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      const exitCode = await run(dir, { json: true });
+
+      expect(exitCode).toBe(0);
+      const parsed = JSON.parse(logSpy.mock.calls[0][0] as string);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].checkId).toBe("secret-scan-history");
       logSpy.mockRestore();
     });
 
